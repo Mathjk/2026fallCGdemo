@@ -28,7 +28,12 @@
   h1, h2, h3, p, figure { margin: 0; }
   p { line-height: 1.65; }
   .masthead { background: var(--paper); border-bottom: 1px solid var(--edge); }
-  .masthead .wrap { min-height: 3.5rem; display: flex; align-items: center; }
+  .masthead .wrap { min-height: 3.5rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .3rem 1rem; padding-block: .35rem; }
+  .course-links { display: flex; align-items: center; gap: .3rem; }
+  .course-links a { display: inline-flex; align-items: center; min-height: 2.5rem; padding: .3rem .7rem; border-radius: .45rem; font-weight: 650; text-decoration: none; }
+  .course-links a:first-child { background: var(--teal); color: white; }
+  .course-links a:hover, .course-links a:focus-visible { text-decoration: underline; }
+  @media print { .course-links { display: none; } }
   .course { font-weight: 750; color: var(--muted); font-size: .91rem; }
   .intro { margin-block: clamp(1.55rem, 4vw, 2.55rem) 1.35rem; }
   .intro-line { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: .85rem; }
@@ -334,7 +339,7 @@
 </style>
 </head>
 <body>
-<div class="masthead"><div class="wrap"><span class="course">2026秋计算几何课程作业示例</span></div></div>
+<div class="masthead"><div class="wrap"><span class="course">2026秋计算几何课程作业示例</span><nav class="course-links" aria-label="课程作业"><a href="./work/">提交作业</a><a href="./work/#mine">我的作业</a></nav></div></div>
 <main class="wrap">
   <header class="intro">
     <div class="intro-line">

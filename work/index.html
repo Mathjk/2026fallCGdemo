@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>课程作业 · 2026 秋计算几何</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <header class="mast"><div class="wrap">
+    <a href="../" class="course">2026秋计算几何课程作业示例</a>
+    <nav aria-label="课程作业"><a href="#submit" id="nav-submit">提交作业</a><a href="#mine" id="nav-mine">我的作业</a></nav>
+  </div></header>
+  <main class="wrap">
+    <h1 id="title">提交作业</h1>
+    <p id="policy" class="policy">正在读取课程设置…</p>
+    <div id="notice" role="status" aria-live="polite"></div>
+    <noscript><p>请启用 JavaScript 后提交作业。</p></noscript>
+    <section class="panel" id="login" hidden aria-labelledby="login-title">
+      <h2 id="login-title">核对课程名单</h2>
+      <p class="hint" id="login-intro">请按课程名单填写，再查看分配给你的主题。</p>
+      <form id="roster-form">
+        <fieldset id="identity-fields">
+          <label>姓名<input name="name" autocomplete="name" required maxlength="100"></label>
+          <label>学号<input name="id" autocapitalize="off" spellcheck="false" required maxlength="48"></label>
+          <label>学院<input name="college" autocomplete="organization" required maxlength="100"></label>
+          <button class="primary" type="submit">查看我的主题</button>
+        </fieldset>
+      </form>
+      <div class="login-alt" id="github-option" hidden><button id="github-login" type="button">已绑定？用 GitHub 登录</button></div>
+    </section>
+    <div id="account" class="account" hidden>
+      <div><strong id="student-name"></strong><span id="student-meta"></span></div>
+      <div class="actions"><button id="bind" type="button" hidden>绑定 GitHub</button><button id="logout" type="button">退出</button></div>
+    </div>
+    <section id="upload-panel" class="panel" hidden aria-labelledby="upload-title">
+      <h2 id="upload-title">上传压缩包</h2>
+      <form id="upload-form"><fieldset id="upload-fields">
+        <label id="choose-label" hidden>作业主题<select id="topic"></select></label>
+        <p id="one-topic" class="topic-title" hidden></p>
+        <label for="archive">ZIP 文件</label>
+        <input type="file" id="archive" accept=".zip,application/zip" required>
+        <p class="hint" id="previous"></p>
+        <button type="submit" class="primary" id="send">提交 ZIP</button>
+      </fieldset></form>
+    </section>
+    <section id="history-panel" class="panel" hidden aria-labelledby="history-title">
+      <h2 id="history-title">我的主题与提交记录</h2><div id="records"></div>
+    </section>
+    <p id="no-topics" class="panel" hidden>目前尚未给你分配主题，请联系任课老师。</p>
+    <a href="../" class="back">返回课程首页</a>
+  </main>
+</body></html>
