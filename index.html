@@ -1,0 +1,1793 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>线性变换 · 可视化复习讲义</title>
+<style>
+  :root {
+    color-scheme: light;
+    --ink: #172a3c;
+    --muted: #476077;
+    --paper: #fff;
+    --bg: #f1f5f8;
+    --edge: #d4dfe8;
+    --grid: #e3ebf1;
+    --teal: #086a5c;
+    --teal-soft: #dff1ec;
+    --orange: #a44727;
+    --orange-soft: #faece4;
+    --violet: #554a97;
+    --violet-soft: #efebfa;
+    font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+    font-size: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); }
+  .wrap { width: min(75rem, calc(100% - 3.25rem)); margin-inline: auto; }
+  h1, h2, h3, p, figure { margin: 0; }
+  p { line-height: 1.65; }
+  .masthead { background: var(--paper); border-bottom: 1px solid var(--edge); }
+  .masthead .wrap { min-height: 3.5rem; display: flex; align-items: center; }
+  .course { font-weight: 750; color: var(--muted); font-size: .91rem; }
+  .intro { margin-block: clamp(1.55rem, 4vw, 2.55rem) 1.35rem; }
+  .intro-line { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: .85rem; }
+  .intro-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+  .dimensions { display: flex; gap: .25rem; padding: .24rem; border: 1px solid var(--edge); border-radius: .6rem; background: var(--paper); }
+  .dimensions button { padding-inline: .62rem; border-color: transparent; }
+  a { color: var(--teal); text-underline-offset: .22em; }
+  h1 { font-size: clamp(2rem, 4vw, 3rem); line-height: 1.16; letter-spacing: -.034em; }
+  .workbench, .note {
+    min-width: 0; background: var(--paper); border: 1px solid var(--edge); border-radius: 1rem;
+  }
+  .workbench { padding: clamp(.8rem, 2vw, 1.25rem); }
+  .workbench h2 { font-size: 1.27rem; line-height: 1.25; }
+  .workbench > header { margin-bottom: .85rem; }
+  .desk {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(14.25rem, .36fr);
+    gap: 1rem; align-items: start;
+  }
+  .plots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+  figcaption {
+    min-height: 2rem; display: flex; justify-content: space-between; align-items: baseline;
+    gap: .5rem; line-height: 1.35; padding: 0 .05rem .37rem; font-size: .94rem; font-weight: 740;
+  }
+  figcaption span { color: var(--muted); font-size: .83rem; font-weight: 500; }
+  canvas {
+    width: 100%; aspect-ratio: 1.38; display: block; border-radius: .64rem;
+    background: #f8fbfc; border: 1px solid var(--edge);
+  }
+  #image { touch-action: none; }
+  .handles { padding: .76rem .85rem .83rem; background: #f5f8fa; border: 1px solid var(--edge); border-radius: .7rem; }
+  .handles h3 { font-size: 1.01rem; }
+  .editor { display: flex; align-items: center; justify-content: center; gap: .67rem; margin-top: .62rem; }
+  .editor em { font-family: "Cambria Math", Georgia, serif; font-size: 1.24rem; white-space: nowrap; }
+  .matrix {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 3.9rem)); gap: .35rem .5rem;
+    padding: .16rem .48rem; position: relative;
+  }
+  .matrix::before, .matrix::after {
+    content: ""; position: absolute; inset-block: 0; width: .33rem;
+    border-block: 2px solid #647d8e;
+  }
+  .matrix::before { left: 0; border-left: 2px solid #647d8e; }
+  .matrix::after { right: 0; border-right: 2px solid #647d8e; }
+  input, button, output { font: inherit; }
+  .matrix input {
+    min-width: 0; width: 100%; height: 2.25rem; padding: .22rem .25rem; text-align: center;
+    border: 1px solid #aecbc5; border-radius: .34rem; background: var(--teal-soft);
+    color: var(--teal); font-weight: 700; font-variant-numeric: tabular-nums;
+    appearance: textfield;
+  }
+  .matrix input:nth-child(even) { border-color: #ddbcae; background: var(--orange-soft); color: var(--orange); }
+  .matrix input::-webkit-inner-spin-button, .matrix input::-webkit-outer-spin-button { appearance: none; }
+  .hint { color: var(--muted); margin-top: .57rem; font-size: .87rem; }
+  .limits { color: var(--muted); margin-top: .44rem; font-size: .85rem; }
+  .limits strong { color: var(--ink); }
+  .examples { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .34rem; margin-top: .72rem; }
+  button {
+    min-height: 2.2rem; padding: .28rem .25rem; border: 1px solid #bdcdd9;
+    background: #fff; border-radius: .4rem; color: var(--ink); cursor: pointer;
+    line-height: 1.25; font-size: .88rem;
+  }
+  button:hover, button[aria-pressed="true"] { color: var(--teal); border-color: #73a69b; background: var(--teal-soft); }
+  button[aria-pressed="true"] { font-weight: 700; }
+  :focus-visible { outline: 3px solid #339087; outline-offset: 3px; }
+  .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .65rem; margin: .85rem 0 0; }
+  .metrics > div { border: 1px solid var(--edge); border-radius: .62rem; padding: .55rem .7rem; background: #f8fafc; }
+  dt { color: var(--muted); font-size: .86rem; line-height: 1.35; }
+  dd { margin: .16rem 0 0; font-weight: 730; font-size: clamp(1.07rem, 2vw, 1.28rem); line-height: 1.26; }
+  output { font-variant-numeric: tabular-nums; }
+  .metrics .complement { display: inline-block; margin-left: .4rem; color: var(--muted); font-weight: 500; font-size: .83rem; }
+  .concepts { margin-block: 1.35rem 2rem; }
+  .concepts > h2 { font-size: 1.36rem; margin-bottom: .66rem; }
+  .notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+  .note { padding: 1rem; }
+  .note h3 { font-size: 1.12rem; line-height: 1.35; }
+  .equation {
+    min-height: 2.72rem; display: grid; align-items: center; justify-items: center;
+    background: #f3f7fa; border-radius: .46rem; padding: .42rem .25rem;
+    margin-top: .69rem; font-family: "Cambria Math", "STIX Two Math", serif;
+    font-size: 1.03rem;
+  }
+  .teal { color: var(--teal); }
+  .orange { color: var(--orange); }
+  .violet { color: var(--violet); }
+  .matrix-three { grid-template-columns: repeat(3, minmax(0, 2.85rem)); column-gap: .33rem; }
+  .matrix-three input:nth-child(3n + 1) { border-color: #aecbc5; background: var(--teal-soft); color: var(--teal); }
+  .matrix-three input:nth-child(3n + 2) { border-color: #ddbcae; background: var(--orange-soft); color: var(--orange); }
+  .matrix-three input:nth-child(3n) { border-color: #c8c0e1; background: var(--violet-soft); color: var(--violet); }
+  .scene canvas[data-orbit="true"] { touch-action: none; cursor: grab; }
+  .scene canvas[data-orbit="true"]:active { cursor: grabbing; }
+  .view-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .38rem .75rem; margin-top: .59rem; }
+  .view-controls p, .plot-help { color: var(--muted); font-size: .87rem; }
+  .view-controls button { padding-inline: .54rem; }
+  .svd { margin-block: 1.35rem 2rem; }
+  .svd h2 { margin-bottom: .57rem; font-size: 1.36rem; }
+  .svd-title-en {
+    display: block; margin-top: .18rem; color: var(--muted);
+    font-size: .94rem; font-weight: 550; line-height: 1.35;
+  }
+  .svd-title-en strong { color: var(--teal); font-weight: 800; }
+  .svd h3 { font-size: 1.1rem; }
+  .svd section { margin-top: 1.03rem; border-top: 1px solid var(--edge); padding-top: .95rem; }
+  .svd .definition {
+    color: var(--muted);
+    line-break: strict;
+    text-wrap: pretty;
+  }
+  .definition .keep-phrase { display: inline-block; white-space: nowrap; }
+  .svd .definition + .definition { margin-top: .46rem; }
+  .theorem-equation { margin: .75rem 0; }
+  .theorem-equation math { font-size: 1.18rem; }
+  .equation-grid {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .55rem;
+    margin-block: .69rem;
+  }
+  .equation-grid .equation { margin-top: 0; }
+  @media (max-width: 18rem) {
+    .definition .keep-phrase { display: inline; white-space: normal; }
+  }
+  .facts {
+    list-style-type: "-  "; margin-block: .8rem 0; padding-inline-start: 1.22rem;
+    color: var(--muted); line-height: 1.55;
+  }
+  .facts li + li { margin-top: .42rem; }
+  .svd .plots { margin-top: .66rem; }
+  .svd .plots canvas { aspect-ratio: 2; }
+  .svd .plot-help { margin-top: .6rem; }
+  .spectrum { display: flex; flex-wrap: wrap; gap: .44rem .84rem; align-items: baseline; margin-top: .6rem; }
+  .spectrum output { font-weight: 700; font-size: 1.04rem; }
+  .steps { display: flex; flex-wrap: wrap; gap: .4rem; margin: .69rem 0 .58rem; }
+  .steps button { padding-inline: .66rem; }
+  .step-content { padding: .82rem; background: #f5f8fa; border-radius: .6rem; border: 1px solid var(--edge); }
+  .step-content p { color: var(--muted); }
+  .factor-list { display: flex; align-items: flex-start; flex-wrap: wrap; gap: .75rem 1.5rem; margin: .6rem 0 .15rem; }
+  .factor { margin: 0; }
+  .factor figcaption { min-height: auto; }
+  .values {
+    margin: 0; border-inline: 2px solid #8298a9; border-radius: .35rem;
+    border-spacing: 0; padding: .12rem .28rem;
+    font-variant-numeric: tabular-nums; font-size: .96rem;
+  }
+  .values td { padding: .17rem .44rem; text-align: right; min-width: 2.45rem; }
+  .numeric-detail { margin-top: .32rem; font-variant-numeric: tabular-nums; }
+  [hidden] { display: none !important; }
+  @media (max-width: 64rem) { canvas { aspect-ratio: 1.15; } }
+  @media (max-width: 53rem) {
+    .wrap { width: calc(100% - 1.75rem); }
+    .desk { grid-template-columns: 1fr; gap: .8rem; }
+    .handles { display: grid; align-items: center; grid-template-columns: 1fr 1fr; gap: .6rem 1rem; }
+    .handles h3 { grid-row: 1; grid-column: 1 / -1; }
+    .editor { grid-row: 2; grid-column: 1; margin: 0; }
+    .examples { grid-row: 2; grid-column: 2; margin: 0; }
+    .hint { grid-row: 3; grid-column: 1 / -1; margin-top: 0; }
+    .limits { grid-row: 4; grid-column: 1 / -1; margin-top: 0; }
+    canvas { aspect-ratio: 1.25; }
+    .notes { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 36rem) {
+    .wrap { width: calc(100% - 1rem); }
+    .workbench { padding: .65rem; }
+    .plots { gap: .45rem; }
+    figcaption { display: block; min-height: 2.85rem; }
+    figcaption span { display: block; }
+    canvas { aspect-ratio: 1; }
+    .handles { padding: .65rem .55rem; gap: .56rem; }
+    .editor { gap: .35rem; }
+    .matrix { column-gap: .28rem; }
+    .matrix-three { grid-template-columns: repeat(3, minmax(0, 2.48rem)); }
+    .svd .plots canvas { aspect-ratio: 1; }
+    .metrics { gap: .35rem; }
+    .metrics > div { padding: .43rem .35rem; }
+    .metrics .complement { display: block; margin-left: 0; }
+  }
+  @media print {
+    body { background: #fff; }
+    .wrap { width: 100%; }
+    .intro { margin-block: .7rem; }
+    .desk { grid-template-columns: 1fr; }
+    .handles { display: none; }
+    .intro-controls, .view-controls, .steps { display: none; }
+    .notes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .workbench, .note { break-inside: avoid; }
+  }
+
+  .workbench { scroll-margin-top: 1rem; }
+  .board-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .48rem .85rem; }
+  .direction-modes, .phase-buttons, .column-picker, .iteration-controls {
+    display: flex; align-items: center; flex-wrap: wrap; gap: .34rem;
+  }
+  .direction-modes button, .phase-buttons button, .column-picker button, .iteration-controls button { padding-inline: .57rem; }
+  .phase-control {
+    margin-block: 0 .92rem; display: flex; align-items: center; flex-wrap: wrap; gap: .34rem .68rem;
+    border-block: 1px solid var(--edge); padding-block: .53rem;
+  }
+  .phase-control > span { font-size: .88rem; font-weight: 700; color: var(--muted); }
+  .phase-buttons sup { line-height: 0; }
+  .column-picker { margin-top: .52rem; }
+  .column-picker button { min-height: 1.95rem; font-size: .83rem; font-weight: 650; }
+  button.column-1 { color: var(--teal); }
+  button.column-2 { color: var(--orange); }
+  button.column-3 { color: var(--violet); }
+  .column-picker button[aria-pressed="true"] { border-color: currentColor; }
+  .matrix input.marked { outline: 2px solid currentColor; outline-offset: -2px; }
+  .spectrum { color: var(--muted); }
+  .spectrum output { color: var(--ink); }
+  #direction-detail { margin-top: .35rem; }
+  .iteration-controls { margin-top: .66rem; }
+  .iteration-controls output { min-width: 8.55rem; text-align: center; font-weight: 650; }
+  button:disabled { opacity: .46; cursor: default; }
+  .values th { padding: .11rem .34rem .21rem; font-weight: 600; }
+  .values td.pivot {
+    background: var(--orange-soft); color: var(--orange); box-shadow: inset 0 -2px var(--orange);
+    font-weight: 730;
+  }
+  .values td.marked { background: var(--teal-soft); color: var(--teal); font-weight: 700; }
+  .values .cell-button { display: block; width: 100%; min-height: 1.85rem; padding: .16rem .35rem; font-variant-numeric: tabular-nums; }
+  .values .column-button { min-height: 1.83rem; min-width: 2.28rem; padding: .13rem .31rem; }
+  .step-details { margin-top: .55rem; }
+  .step-details + .step-details, .step-details p + p { margin-top: .39rem; }
+  .calc-line { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .sort-map { font-size: .89rem; color: var(--muted); }
+  @media (max-width: 53rem) {
+    .column-picker { grid-row: 3; grid-column: 1 / -1; margin-top: 0; }
+  }
+  @media (max-width: 36rem) {
+    .phase-buttons { gap: .26rem; }
+    .phase-buttons button { padding-inline: .42rem; }
+    .values td { min-width: 1.85rem; padding-inline: .31rem; }
+  }
+  @media print {
+    .phase-control, .direction-modes, .iteration-controls { display: none; }
+  }
+
+
+  math {
+    font-family: "Cambria Math", "STIX Two Math", "Latin Modern Math", math;
+    font-size: 1.03em;
+  }
+  button math, output math { color: inherit; }
+  .equation, .factor { min-width: 0; max-width: 100%; overflow-x: auto; }
+  .equation { display: flex; justify-content: safe center; }
+  .equation > math { flex: 0 0 auto; }
+  .calc-line { overflow-wrap: anywhere; }
+  .calc-line math { white-space: nowrap; }
+  .header-link { white-space: nowrap; }
+  .plot-surface { position: relative; min-width: 0; }
+  .plot-labels { position: absolute; inset: 1px; overflow: hidden; pointer-events: none; }
+  .plot-label { position: absolute; white-space: nowrap; line-height: 1; font-size: .87rem; font-weight: 650; }
+  .plot-label math { text-shadow: 0 0 2px #fff, 0 0 4px #fff, 1px 1px 0 #fff; }
+  .plot-surface canvas { touch-action: pan-y; }
+  .plot-surface canvas[data-orbit="true"], .plot-surface #image { touch-action: none; }
+  .touch-toggle { display: none; }
+  .spectrum output { display: flex; flex-wrap: wrap; gap: .18rem .68rem; }
+  .spectrum output math { white-space: nowrap; }
+  .metrics dt, .metrics dd { overflow-wrap: anywhere; }
+  @media (any-pointer: coarse) {
+    #comparison .touch-toggle { display: inline-flex; align-items: center; }
+    #comparison:not([data-touch-active="true"]) .plot-surface canvas { touch-action: pan-y; }
+  }
+  @media (max-width: 53rem) {
+    .wrap { width: min(75rem, calc(100% - 1.75rem)); }
+    .intro-controls { flex: 1 1 100%; }
+    .intro-controls .header-link { display: inline-flex; align-items: center; min-height: 2.75rem; }
+    button, .dimensions button, .column-picker button, .values .cell-button, .values .column-button {
+      min-height: 2.75rem;
+    }
+    .matrix input { min-height: 2.75rem; font-size: 1rem; }
+    .values td, .values th { min-width: 0; padding-inline: .26rem; }
+    .values .cell-button, .values .column-button { padding-inline: .28rem; }
+  }
+  @media (max-width: 37.5rem) {
+    .wrap { width: calc(100% - 1.25rem); }
+    .workbench { padding: .7rem; }
+    .intro-controls { gap: .46rem .6rem; }
+    .phase-control { align-items: stretch; flex-direction: column; gap: .4rem; }
+    .phase-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .35rem; }
+    .phase-buttons button { padding-inline: .3rem; }
+    .plots { grid-template-columns: minmax(0, 1fr); gap: .82rem; }
+    .plots figcaption { display: flex; min-height: auto; flex-wrap: wrap; }
+    .plot-surface canvas { aspect-ratio: 1.48; }
+    .view-controls { margin-top: .68rem; }
+    .handles { display: block; }
+    .handles .editor { margin-top: .55rem; }
+    .handles .column-picker, .handles .limits { margin-top: .46rem; }
+    .handles .examples { margin-top: .59rem; }
+    .matrix-three { grid-template-columns: repeat(3, minmax(0, 3.6rem)); }
+    .equation-grid { grid-template-columns: minmax(0, 1fr); }
+    .step-content { padding: .64rem; }
+    .steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .steps button { padding-inline: .28rem; }
+    .factor-list { gap: .63rem 1rem; }
+    .factor-list figcaption { display: block; min-height: auto; }
+  }
+  @media (max-width: 25rem) {
+    .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .metrics > div:last-child { grid-column: 1 / -1; }
+    .iteration-controls { display: grid; grid-template-columns: 1fr 1fr; }
+    .iteration-controls output { grid-area: 1 / 1 / 2 / 3; text-align: left; }
+  }
+  @media print {
+    #comparison .touch-toggle { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="masthead"><div class="wrap"><span class="course">2026秋计算几何课程作业示例</span></div></div>
+<main class="wrap">
+  <header class="intro">
+    <div class="intro-line">
+      <h1 id="lecture-title">二维线性变换</h1>
+      <div class="intro-controls">
+        <div class="dimensions" role="group" aria-label="线性变换维数">
+          <button type="button" id="choose-2d" aria-controls="comparison" aria-pressed="true">二维 <math><mrow><mn>2</mn><mo>×</mo><mn>2</mn></mrow></math></button>
+          <button type="button" id="choose-3d" aria-controls="comparison" aria-pressed="false">三维 <math><mrow><mn>3</mn><mo>×</mo><mn>3</mn></mrow></math></button>
+        </div>
+        <a href="#svd" class="header-link">SVD 定理与算法</a>
+      </div>
+    </div>
+  </header>
+  <section id="comparison" class="workbench" aria-labelledby="board-title">
+    <header class="board-head">
+      <h2 id="board-title">矩阵与图形</h2>
+      <div class="direction-modes" role="group" aria-label="图中显示的方向">
+        <button type="button" id="show-basis" aria-pressed="true">标准基</button>
+        <button type="button" id="show-singular" aria-pressed="false">奇异方向</button>
+      </div>
+      <button type="button" id="touch-toggle" class="touch-toggle" aria-pressed="false">操作图形</button>
+    </header>
+    <div class="phase-control" role="group" aria-label="SVD 几何阶段">
+      <span>右图变换 <math><mrow><mi>T</mi></mrow></math></span>
+      <div class="phase-buttons">
+        <button type="button" data-phase="0" aria-pressed="false">原图 <math><mrow><mi>I</mi></mrow></math></button>
+        <button type="button" data-phase="1" aria-pressed="false">对齐 <math><mrow><msup><mi>V</mi><mo>⊤</mo></msup></mrow></math></button>
+        <button type="button" data-phase="2" aria-pressed="false">缩放 <math><mrow><mi>Σ</mi><msup><mi>V</mi><mo>⊤</mo></msup></mrow></math></button>
+        <button type="button" data-phase="3" aria-pressed="true">完整变换 <math><mrow><mi>A</mi></mrow></math></button>
+      </div>
+    </div>
+    <div class="desk">
+      <div>
+        <div class="plots">
+          <figure>
+            <figcaption>变换前 <span id="domain-description">标准基与单位正方形</span></figcaption>
+            <div class="plot-surface"><canvas id="domain" role="img" aria-describedby="interaction-help" aria-label="标准基与单位正方形。"></canvas><div class="plot-labels" aria-hidden="true"></div></div>
+          </figure>
+          <figure>
+            <figcaption id="image-caption"><strong id="phase-title">完整变换 <math><mrow><mi>A</mi></mrow></math></strong> <span id="image-description"><math><mrow><mi>A</mi></mrow></math> 的列与正方形的像</span></figcaption>
+            <div class="plot-surface"><canvas id="image" role="img" aria-describedby="interaction-help" aria-label="矩阵 A 的列向量和单位正方形的像。"></canvas><div class="plot-labels" aria-hidden="true"></div></div>
+          </figure>
+        </div>
+        <div class="view-controls">
+          <p id="interaction-help">拖动右图的箭头端点，编辑对应的矩阵列。</p>
+          <button type="button" id="reset-camera" hidden>重置视角</button>
+        </div>
+        <div class="spectrum" id="spectrum" hidden>
+          <span>矩阵 <math><mrow><mi>A</mi></mrow></math> 的奇异值</span><output id="singular-values"></output>
+        </div>
+        <p class="plot-help" id="direction-detail" hidden></p>
+      </div>
+      <div class="handles">
+        <h3>变换矩阵</h3>
+        <div class="editor">
+          <span class="matrix-symbol"><math><mrow><mi>A</mi><mo>=</mo></mrow></math></span>
+          <div class="matrix" id="matrix-editor"></div>
+        </div>
+        <div class="column-picker" id="column-picker" role="group" aria-label="拖动时优先选择的列"></div>
+        <p class="limits" id="entry-limits">每项范围 <strong><math><mrow><mo>[</mo><mo>−</mo><mn>2</mn><mo>,</mo><mn>2</mn><mo>]</mo></mrow></math></strong>，步长 <strong><math><mrow><mn>0.25</mn></mrow></math></strong>。回车或离开输入框后自动取最近的可用值。</p>
+        <div class="examples" id="examples" role="group" aria-label="示例矩阵"></div>
+      </div>
+    </div>
+    <dl class="metrics">
+      <div><dt id="det-label">行列式 <math><mrow><mi mathvariant="normal">det</mi><mi>A</mi></mrow></math></dt><dd><output id="det"><math><mrow><mn>1</mn></mrow></math></output><span class="complement" id="orientation">保向</span></dd></div>
+      <div><dt id="measure-label">右图正方形像的面积</dt><dd><output id="measure"><math><mrow><mn>1</mn></mrow></math></output><span class="complement" id="measure-scope">原面积为 <math><mrow><mn>1</mn></mrow></math></span></dd></div>
+      <div><dt id="rank-label">秩 <math><mrow><mi mathvariant="normal">rank</mi><mi>A</mi></mrow></math></dt><dd><output id="rank"><math><mrow><mn>2</mn></mrow></math></output><span class="complement" id="image-space">像空间是平面</span></dd></div>
+    </dl>
+    <noscript><p>用浏览器启用 JavaScript 后可显示图形并调整矩阵。</p></noscript>
+  </section>
+  <div id="dimension-2">
+  <section class="concepts" aria-labelledby="concept-title">
+    <h2 id="concept-title">三个知识点</h2>
+    <div class="notes">
+      <article class="note">
+        <h3>矩阵的列是基向量的像</h3>
+        <div class="equation">
+          <math aria-label="A 作用于向量 (x, y)，等于 x 倍的 A e 一加 y 倍的 A e 二">
+            <mi>A</mi><msup><mrow><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo></mrow><mo>⊤</mo></msup>
+            <mo>=</mo><mi>x</mi><mi>A</mi><msub><mi>e</mi><mn>1</mn></msub><mo>+</mo><mi>y</mi><mi>A</mi><msub><mi>e</mi><mn>2</mn></msub>
+          </math>
+        </div>
+      </article>
+      <article class="note">
+        <h3>行列式给出有向面积</h3>
+        <div class="equation">
+          <math aria-label="行列式等于 a 乘 d 减 b 乘 c">
+            <mi mathvariant="normal">det</mi><mi>A</mi><mo>=</mo><mi>a</mi><mi>d</mi><mo>−</mo><mi>b</mi><mi>c</mi>
+          </math>
+        </div>
+      </article>
+      <article class="note">
+        <h3>秩给出像空间的维数</h3>
+        <div class="equation">
+          <math aria-label="矩阵的秩等于两列向量张成空间的维数">
+            <mi mathvariant="normal">rank</mi><mi>A</mi><mo>=</mo><mi mathvariant="normal">dim</mi><mspace width="0.25em"></mspace>
+            <mi mathvariant="normal">span</mi><mo>{</mo><mi>A</mi><msub><mi>e</mi><mn>1</mn></msub>
+            <mo>,</mo><mi>A</mi><msub><mi>e</mi><mn>2</mn></msub><mo>}</mo>
+          </math>
+        </div>
+      </article>
+    </div>
+  </section>
+  </div>
+  <div id="dimension-3" hidden>
+    <section class="concepts" aria-labelledby="concept-title-3d">
+      <h2 id="concept-title-3d">三个知识点</h2>
+      <div class="notes">
+        <article class="note">
+          <h3>三列向量张成立方体的像</h3>
+          <div class="equation"><math aria-label="向量的像是三列按输入坐标进行线性组合"><mi>A</mi><mi>p</mi><mo>=</mo><mi>x</mi><mi>A</mi><msub><mi>e</mi><mn>1</mn></msub><mo>+</mo><mi>y</mi><mi>A</mi><msub><mi>e</mi><mn>2</mn></msub><mo>+</mo><mi>z</mi><mi>A</mi><msub><mi>e</mi><mn>3</mn></msub></math></div>
+        </article>
+        <article class="note">
+          <h3>行列式给出有向体积</h3>
+          <div class="equation"><math aria-label="行列式等于三列的标量三重积"><mi mathvariant="normal">det</mi><mi>A</mi><mo>=</mo><mi>A</mi><msub><mi>e</mi><mn>1</mn></msub><mo>⋅</mo><mo>(</mo><mi>A</mi><msub><mi>e</mi><mn>2</mn></msub><mo>×</mo><mi>A</mi><msub><mi>e</mi><mn>3</mn></msub><mo>)</mo></math></div>
+        </article>
+        <article class="note">
+          <h3>秩给出退化后的维数</h3>
+          <div class="equation"><math aria-label="秩是三列所张成空间的维数"><mi mathvariant="normal">rank</mi><mi>A</mi><mo>=</mo><mi mathvariant="normal">dim</mi><mspace width="0.25em"></mspace><mi mathvariant="normal">span</mi><mo>{</mo><mi>A</mi><msub><mi>e</mi><mn>1</mn></msub><mo>,</mo><mi>A</mi><msub><mi>e</mi><mn>2</mn></msub><mo>,</mo><mi>A</mi><msub><mi>e</mi><mn>3</mn></msub><mo>}</mo></math></div>
+        </article>
+      </div>
+    </section>
+  </div>
+  <article id="svd" class="workbench svd scene" aria-labelledby="svd-title">
+    <h2 id="svd-title">
+      奇异值分解定理
+      <span class="svd-title-en" lang="en"><strong>S</strong>ingular <strong>V</strong>alue <strong>D</strong>ecomposition Theorem</span>
+    </h2>
+    <p class="definition">任意 <span class="keep-phrase"><math><mrow><mi>m</mi><mo>×</mo><mi>n</mi></mrow></math> 实矩阵 <math><mi>A</mi></math></span> 都能分解为下列形式：</p>
+    <div class="equation theorem-equation">
+      <math display="block" aria-label="A 等于 U 乘 Sigma 乘 V 的转置"><mi>A</mi><mo>=</mo><mi>U</mi><mi>Σ</mi><msup><mi>V</mi><mo>⊤</mo></msup></math>
+    </div>
+    <p class="definition">
+      <span class="keep-phrase"><math><mi>U</mi></math> 和 <math><mi>V</mi></math></span> 分别是 <span class="keep-phrase"><math><mi>m</mi></math> 阶</span>和 <span class="keep-phrase"><math><mi>n</mi></math> 阶正交矩阵</span>，满足
+      <span class="keep-phrase"><math><msup><mi>U</mi><mo>⊤</mo></msup><mi>U</mi><mo>=</mo><msub><mi>I</mi><mi>m</mi></msub></math>、</span><span class="keep-phrase"><math><msup><mi>V</mi><mo>⊤</mo></msup><mi>V</mi><mo>=</mo><msub><mi>I</mi><mi>n</mi></msub></math>。</span>
+      <math><mi>Σ</mi></math> 是 <span class="keep-phrase"><math><mi>m</mi><mo>×</mo><mi>n</mi></math> 矩阵</span>，主对角线有 <span class="keep-phrase"><math><mi>p</mi><mo>=</mo><mi>min</mi><mo>(</mo><mi>m</mi><mo>,</mo><mi>n</mi><mo>)</mo></math> 个元素</span>。
+    </p>
+    <div class="equation-grid">
+      <div class="equation">
+        <math display="block" aria-label="U 是 m 阶矩阵，第 i 行第 j 列的元素为 u 下标 i j">
+          <mi>U</mi><mo>=</mo>
+          <mrow>
+            <mo stretchy="true">(</mo>
+            <mtable>
+              <mtr><mtd><msub><mi>u</mi><mn>11</mn></msub></mtd><mtd><mo>⋯</mo></mtd><mtd><msub><mi>u</mi><mrow><mn>1</mn><mi>m</mi></mrow></msub></mtd></mtr>
+              <mtr><mtd><mo>⋮</mo></mtd><mtd><mo>⋱</mo></mtd><mtd><mo>⋮</mo></mtd></mtr>
+              <mtr><mtd><msub><mi>u</mi><mrow><mi>m</mi><mn>1</mn></mrow></msub></mtd><mtd><mo>⋯</mo></mtd><mtd><msub><mi>u</mi><mrow><mi>m</mi><mi>m</mi></mrow></msub></mtd></mtr>
+            </mtable>
+            <mo stretchy="true">)</mo>
+          </mrow>
+        </math>
+      </div>
+      <div class="equation">
+        <math display="block" aria-label="Sigma 的第 i 行第 j 列在 i 等于 j 时为第 i 个奇异值，其余位置为零">
+          <msub><mi>Σ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>=</mo>
+          <mrow>
+            <mo stretchy="true">{</mo>
+            <mtable>
+              <mtr><mtd><msub><mi>σ</mi><mi>i</mi></msub></mtd><mtd><mi>i</mi><mo>=</mo><mi>j</mi></mtd></mtr>
+              <mtr><mtd><mn>0</mn></mtd><mtd><mi>i</mi><mo>≠</mo><mi>j</mi></mtd></mtr>
+            </mtable>
+          </mrow>
+        </math>
+      </div>
+      <div class="equation">
+        <math display="block" aria-label="V 是 n 阶矩阵，第 i 行第 j 列的元素为 v 下标 i j">
+          <mi>V</mi><mo>=</mo>
+          <mrow>
+            <mo stretchy="true">(</mo>
+            <mtable>
+              <mtr><mtd><msub><mi>v</mi><mn>11</mn></msub></mtd><mtd><mo>⋯</mo></mtd><mtd><msub><mi>v</mi><mrow><mn>1</mn><mi>n</mi></mrow></msub></mtd></mtr>
+              <mtr><mtd><mo>⋮</mo></mtd><mtd><mo>⋱</mo></mtd><mtd><mo>⋮</mo></mtd></mtr>
+              <mtr><mtd><msub><mi>v</mi><mrow><mi>n</mi><mn>1</mn></mrow></msub></mtd><mtd><mo>⋯</mo></mtd><mtd><msub><mi>v</mi><mrow><mi>n</mi><mi>n</mi></mrow></msub></mtd></mtr>
+            </mtable>
+            <mo stretchy="true">)</mo>
+          </mrow>
+        </math>
+      </div>
+    </div>
+    <p class="definition">主对角线元素是 <math><mi>A</mi></math> 的奇异值，满足 <span class="keep-phrase"><math><msub><mi>σ</mi><mn>1</mn></msub><mo>≥</mo><mo>⋯</mo><mo>≥</mo><msub><mi>σ</mi><mi>p</mi></msub><mo>≥</mo><mn>0</mn></math>。</span></p>
+    <p class="definition">从右往左，<span class="keep-phrase"><math><mrow><msup><mi>V</mi><mo>⊤</mo></msup></mrow></math> 把输入</span>转到<span class="keep-phrase">右奇异向量坐标</span>，<span class="keep-phrase"><math><mrow><mi>Σ</mi></mrow></math> 按各轴缩放</span>，<span class="keep-phrase"><math><mrow><mi>U</mi></mrow></math> 把结果</span>送到<span class="keep-phrase">左奇异向量方向</span>。</p>
+    <ul class="facts">
+      <li>当 <math><mn>1</mn><mo>≤</mo><mi>i</mi><mo>≤</mo><mi>p</mi></math> 时，<math><mi>A</mi><msub><mi>v</mi><mi>i</mi></msub><mo>=</mo><msub><mi>σ</mi><mi>i</mi></msub><msub><mi>u</mi><mi>i</mi></msub></math>，其中 <math><msub><mi>u</mi><mi>i</mi></msub></math> 与 <math><msub><mi>v</mi><mi>i</mi></msub></math> 分别是 <math><mi>U</mi></math> 与 <math><mi>V</mi></math> 的第 <math><mi>i</mi></math> 列。</li>
+      <li>秩等于正奇异值的个数。</li>
+      <li>对方阵，<math><mrow><mrow><mo stretchy="true">|</mo><mrow><mi mathvariant="normal">det</mi><mi>A</mi></mrow><mo stretchy="true">|</mo></mrow></mrow></math> 等于全部奇异值之积。</li>
+    </ul>
+    <section id="algorithm" aria-labelledby="algorithm-title">
+      <header class="board-head">
+        <h3 id="algorithm-title">SVD 算法</h3>
+        <a href="#comparison">查看上方变换图</a>
+      </header>
+      <p class="definition">这里展示用 <span class="keep-phrase">Gram 矩阵</span>和<span class="keep-phrase">对称 Jacobi 迭代</span>求解矩阵的 <span class="keep-phrase">SVD 分解</span>。</p>
+      <div class="steps" role="group" aria-label="SVD 算法步骤">
+        <button type="button" data-svd-step="0" aria-pressed="true">1 构造 Gram 矩阵</button>
+        <button type="button" data-svd-step="1" aria-pressed="false">2 Jacobi 迭代</button>
+        <button type="button" data-svd-step="2" aria-pressed="false">3 组装 <math><mrow><mi>V</mi></mrow></math>、<math><mrow><mi>Σ</mi></mrow></math>、<math><mrow><mi>U</mi></mrow></math></button>
+        <button type="button" data-svd-step="3" aria-pressed="false">4 验证分解</button>
+      </div>
+      <div class="step-content">
+        <p id="step-explanation"></p>
+        <div class="iteration-controls" id="iteration-controls" hidden>
+          <button type="button" id="iteration-prev">上一轮</button>
+          <output id="iteration-counter"></output>
+          <button type="button" id="iteration-next">下一轮</button>
+        </div>
+        <div class="factor-list" id="factor-list"></div>
+        <div class="step-details" id="step-detail"></div>
+      </div>
+    </section>
+  </article>
+</main>
+<script>
+"use strict";
+
+const MATH_OPERATORS = new Set(["det", "rank", "dim", "span", "sgn", "max"]);
+const MATH_SUBSCRIPTS = {"₀":"0","₁":"1","₂":"2","₃":"3","₄":"4","₅":"5","₆":"6","₇":"7","₈":"8","₉":"9","ᵢ":"i","ⱼ":"j","ₖ":"k","ₚ":"p","ᵩ":"q","₊":"+"};
+const MATH_SUPERSCRIPTS = {"ᵀ":"⊤","²":"2","³":"3"};
+const escapeMarkup = text => String(text).replace(/[&<>"]/g, symbol => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;"})[symbol]);
+const mathTag = (tag, raw) => "<" + tag + ">" + escapeMarkup(raw) + "</" + tag + ">";
+const mathRow = children => "<mrow>" + children + "</mrow>";
+
+function mathContent(expression) {
+  const tokens = expression.match(/\\[a-z]+|\d+(?:\.\d+)?(?:e[−+\-]?\d+)?|det|rank|dim|span|sgn|max|[^\s]/gu) ?? [];
+  let i = 0;
+  function glyph(token) {
+    if (/^\d/.test(token)) {
+      const [mantissa, exponent] = token.split("e");
+      const value = mathTag("mn", mantissa);
+      if (exponent === undefined) return value;
+      const sign = /^[−+\-]/.test(exponent) ? mathTag("mo", exponent[0].replace("-", "−")) : "";
+      return mathRow(value + mathTag("mo", "×") + "<msup><mn>10</mn>"
+        + mathRow(sign + mathTag("mn", exponent.replace(/^[−+\-]/, ""))) + "</msup>");
+    }
+    if (MATH_OPERATORS.has(token)) return '<mi mathvariant="normal">' + token + "</mi>";
+    if (/^[A-Za-zΑ-Ωα-ω]$/u.test(token)) return mathTag("mi", token);
+    return mathTag("mo", token === "-" ? "−" : token);
+  }
+  function atom() {
+    const token = tokens[i++];
+    if (token === "{") {
+      const inside = row("}");
+      if (tokens[i++] !== "}") throw new Error("Unclosed math group: " + expression);
+      return mathRow(inside);
+    }
+    if (token === "\\frac") return "<mfrac>" + atom() + atom() + "</mfrac>";
+    if (token === "\\sqrt") return "<msqrt>" + atom() + "</msqrt>";
+    if (token === "\\norm" || token === "\\abs") {
+      const fence = token === "\\norm" ? "‖" : "|";
+      const fenceTag = '<mo stretchy="true">' + fence + "</mo>";
+      return mathRow(fenceTag + atom() + fenceTag);
+    }
+    if (!token || token.startsWith("\\")) throw new Error("Unsupported math token in " + expression);
+    return glyph(token);
+  }
+  function row(end) {
+    let result = "";
+    while (i < tokens.length && tokens[i] !== end) {
+      const base = atom();
+      let lower = "", upper = "";
+      while (i < tokens.length) {
+        const next = tokens[i];
+        if (next === "_") {
+          i++;
+          lower = atom();
+        } else if (next === "^") {
+          i++;
+          upper = atom();
+        } else if (Object.hasOwn(MATH_SUBSCRIPTS, next)) {
+          let subscripts = "";
+          while (Object.hasOwn(MATH_SUBSCRIPTS, tokens[i])) subscripts += glyph(MATH_SUBSCRIPTS[tokens[i++]]);
+          lower = mathRow(subscripts);
+        } else if (Object.hasOwn(MATH_SUPERSCRIPTS, next)) {
+          upper = glyph(MATH_SUPERSCRIPTS[tokens[i++]]);
+        } else break;
+      }
+      if (lower && upper) result += "<msubsup>" + base + lower + upper + "</msubsup>";
+      else if (lower) result += "<msub>" + base + lower + "</msub>";
+      else if (upper) result += "<msup>" + base + upper + "</msup>";
+      else result += base;
+    }
+    return result;
+  }
+  return mathRow(row());
+}
+
+const mathMarkup = expression => "<math>" + mathContent(expression) + "</math>";
+const mathToken = expression => "⟦" + expression + "⟧";
+const MATH_DELIMITERS = /⟦([^⟧]+)⟧/g;
+function richMarkup(source) {
+  let result = "", offset = 0;
+  for (const match of String(source).matchAll(MATH_DELIMITERS)) {
+    result += escapeMarkup(source.slice(offset, match.index)) + mathMarkup(match[1]);
+    offset = match.index + match[0].length;
+  }
+  return result + escapeMarkup(source.slice(offset));
+}
+const plainMarkup = source => String(source).replace(MATH_DELIMITERS, "$1");
+function setRich(node, source) {
+  node.innerHTML = richMarkup(source);
+}
+
+const DENOMINATOR = 4;
+const UNIT_SQUARE = [[0, 0], [1, 0], [1, 1], [0, 1]];
+const ORIGIN = UNIT_SQUARE[0];
+const CUBE = Array.from({length: 8}, (_, i) => [i & 1, (i >> 1) & 1, (i >> 2) & 1]);
+const CUBE_FACES = [[0, 1, 3, 2], [4, 5, 7, 6], [0, 1, 5, 4], [2, 3, 7, 6], [0, 2, 6, 4], [1, 3, 7, 5]];
+const GREEN = "#086a5c";
+const ORANGE = "#a44727";
+const VIOLET = "#554a97";
+const VECTOR_COLORS = [GREEN, ORANGE, VIOLET];
+const SUB = "₀₁₂₃₄₅₆₇₈₉";
+const XYZ = ["x", "y", "z"];
+const INITIAL_CAMERA = {yaw: .68, pitch: .53};
+const PRESETS = {
+  2: [
+    ["剪切", [4, 3, 0, 4]], ["旋转 ⟦90°⟧", [0, -4, 4, 0]], ["面积加倍", [8, 0, 0, 4]],
+    ["镜像", [4, 0, 0, -4]], ["压到直线", [4, -2, 4, -2]], ["压到原点", [0, 0, 0, 0]]
+  ],
+  3: [
+    ["剪切", [4, 3, 0, 0, 4, 2, 0, 0, 4]], ["绕 ⟦z⟧ 轴旋转", [0, -4, 0, 4, 0, 0, 0, 0, 4]],
+    ["体积加倍", [8, 0, 0, 0, 4, 0, 0, 0, 4]], ["镜像", [4, 0, 0, 0, 4, 0, 0, 0, -4]],
+    ["压到平面", [4, 0, 2, 0, 4, 2, 0, 0, 0]], ["压到直线", [4, -2, 2, 2, -1, 1, 2, -1, 1]],
+    ["压到原点", [0, 0, 0, 0, 0, 0, 0, 0, 0]]
+  ]
+};
+const PHASE_TITLES = ["原图 ⟦I⟧", "对齐 ⟦Vᵀ⟧", "缩放 ⟦ΣVᵀ⟧", "完整变换 ⟦A⟧"];
+const TRANSFORM_NAMES = ["I", "Vᵀ", "ΣVᵀ", "A"];
+const STEP_TEXTS = [
+  "用 ⟦A⟧ 的列向量做内积，得到 ⟦G₀ = AᵀA⟧。点选 ⟦G₀⟧ 的任一元素即可展开计算。",
+  "从 ⟦Gₖ⟧ 中选出绝对值最大的非对角元 ⟦{(Gₖ)}_{pq}⟧。用旋转矩阵 ⟦Jₖ⟧ 消去该元素，累积各轮旋转用于构造 ⟦V⟧。",
+  "按特征值从大到小排成 ⟦Λ⟧，同时重排对应的列向量 ⟦vᵢ⟧。点选 ⟦V⟧ 或 ⟦U⟧ 的列头，查看这一组奇异向量的计算和图形。",
+  "用未舍入的因子重构 ⟦A⟧，并检查 ⟦U⟧ 和 ⟦V⟧ 的列是否构成标准正交基。"
+];
+const state = {size: 2, mode: "basis", phase: 3, step: 0, iteration: 0, gram: [0, 1], direction: 0, highlight: null};
+const matrices = Object.fromEntries([2, 3].map(size => [size, {entries: PRESETS[size][0][1].slice(), preset: 0, column: 0}]));
+const current = () => matrices[state.size];
+const byId = id => document.getElementById(id);
+const domain = byId("domain");
+const image = byId("image");
+const phaseButtons = [...document.querySelectorAll("[data-phase]")];
+const stepButtons = [...document.querySelectorAll("[data-svd-step]")];
+let camera = {...INITIAL_CAMERA};
+let model, frameOnRight, boardBounds, gesture;
+let touchActive = false;
+let inputs = [], columnButtons = [], presetButtons = [];
+
+function geometry([a, b, c, d]) {
+  const detNumerator = (a * d - b * c) || 0;
+  const det = detNumerator / (DENOMINATOR * DENOMINATOR);
+  const nonzero = [a, b, c, d].some(value => value !== 0);
+  const rank = detNumerator !== 0 ? 2 : Number(nonzero);
+  const transform = ([x, y]) => [(a * x + b * y) / DENOMINATOR, (c * x + d * y) / DENOMINATOR];
+  const corners = UNIT_SQUARE.map(transform);
+  return { det, rank, transform, corners, vectors: [corners[1], corners[3]] };
+}
+
+function toEntry(value) {
+  return Math.max(-8, Math.min(8, Math.round(value * DENOMINATOR))) || 0;
+}
+
+
+const dot = (u, v) => u.reduce((sum, value, index) => sum + value * v[index], 0);
+const cross = ([a, b, c], [x, y, z]) => [b * z - c * y, c * x - a * z, a * y - b * x];
+const scaleVector = (u, factor) => u.map(value => factor * value);
+const difference = (u, v) => u.map((value, index) => value - v[index]);
+const transpose = rows => rows[0].map((_, i) => rows.map(row => row[i]));
+const identity = size => Array.from({length: size}, (_, i) =>
+  Array.from({length: size}, (_, j) => Number(i === j)));
+const timesVector = (rows, vector) => rows.map(row => dot(row, vector));
+const matrixRows = (flat, size, divisor) =>
+  Array.from({length: size}, (_, i) => flat.slice(i * size, (i + 1) * size).map(value => value / divisor));
+const BASIS3 = identity(3);
+const ORIGIN3 = CUBE[0];
+const AXIS_TIPS_3D = BASIS3.map(axis => scaleVector(axis, 1.33));
+
+function geometry3(entries) {
+  const exact = transpose(matrixRows(entries, 3, 1));
+  const minors = exact.map((column, i) => cross(column, exact[(i + 1) % 3]));
+  const determinantNumerator = dot(exact[0], minors[1]) || 0;
+  let rank = 0;
+  if (determinantNumerator !== 0) rank = 3;
+  else if (minors.some(minor => minor.some(value => value !== 0))) rank = 2;
+  else if (entries.some(value => value !== 0)) rank = 1;
+  const rows = matrixRows(entries, 3, DENOMINATOR);
+  return {
+    det: determinantNumerator / DENOMINATOR ** 3,
+    rank,
+    vectors: transpose(rows),
+    corners: CUBE.map(vertex => timesVector(rows, vertex))
+  };
+}
+
+
+
+const multiply = (a, b) => {
+  const columns = transpose(b);
+  return a.map(row => columns.map(col => dot(row, col)));
+};
+const matrixError = (a, b) => Math.hypot(...a.flatMap((row, i) => difference(row, b[i])));
+const detSmall = rows => rows.length === 2
+  ? rows[0][0] * rows[1][1] - rows[0][1] * rows[1][0]
+  : dot(rows[0], cross(rows[1], rows[2]));
+const diagonal = values => identity(values.length).map((row, i) => scaleVector(row, values[i]));
+const sub = n => String(n).replace(/[0-9]/g, digit => SUB[Number(digit)]);
+const display = value => {
+  if (Math.abs(value) < 5e-15) return "0";
+  if (Math.abs(value) < .0001) return value.toExponential(2).replace(/-/g, "−");
+  return String(Number(value.toFixed(4))).replace(/^-/, "−");
+};
+const errorText = value => value === 0 ? "0" : value.toExponential(2).replace(/-/g, "−");
+const vectorText = values => "(" + values.map(display).join(", ") + ")";
+
+function largestOffDiagonal(matrix) {
+  let p = 0;
+  let q = 1;
+  for (let i = 0; i < matrix.length; i++) {
+    for (let j = i + 1; j < matrix.length; j++) {
+      if (Math.abs(matrix[i][j]) > Math.abs(matrix[p][q])) {
+        p = i;
+        q = j;
+      }
+    }
+  }
+  return {p, q, value: matrix[p][q]};
+}
+
+function jacobi(gram) {
+  const size = gram.length;
+  let matrix = gram;
+  let basis = identity(size);
+  const tolerance = 4 * Number.EPSILON * Math.max(1, ...gram.map((row, i) => row[i]));
+  const trace = [];
+  for (let k = 0; k < 48; k++) {
+    const {p, q, value: b} = largestOffDiagonal(matrix);
+    if (Math.abs(b) <= tolerance) break;
+    const a = matrix[p][p];
+    const d = matrix[q][q];
+    const tau = (d - a) / (2 * b);
+    const tangent = (tau < 0 ? -1 : 1) / (Math.abs(tau) + Math.hypot(1, tau));
+    const cosine = 1 / Math.hypot(1, tangent);
+    const sine = cosine * tangent;
+    const rotation = identity(size);
+    rotation[p][p] = rotation[q][q] = cosine;
+    rotation[p][q] = sine;
+    rotation[q][p] = -sine;
+    // Update the symmetric block without subtracting rounded matrix products.
+    const next = matrix.map(row => row.slice());
+    next[p][p] = a - tangent * b;
+    next[q][q] = d + tangent * b;
+    next[p][q] = next[q][p] = 0;
+    for (let i = 0; i < size; i++) {
+      if (i === p || i === q) continue;
+      const [x, y] = [matrix[i][p], matrix[i][q]];
+      next[p][i] = next[i][p] = cosine * x - sine * y;
+      next[q][i] = next[i][q] = sine * x + cosine * y;
+    }
+    const nextBasis = multiply(basis, rotation);
+    trace.push({p, q, a, b, d, tau, tangent, cosine, sine, rotation,
+      before: matrix, after: next, basisBefore: basis, basisAfter: nextBasis});
+    matrix = next;
+    basis = nextBasis;
+  }
+  return {matrix, basis, trace, tolerance, finalOffDiagonal: Math.abs(largestOffDiagonal(matrix).value)};
+}
+
+function completeBasis(positive, size) {
+  const basis = positive.slice();
+  const supplement = [];
+  const standards = identity(size);
+  while (basis.length < size) {
+    let best;
+    for (const [axis, standard] of standards.entries()) {
+      let remainder = standard;
+      for (let pass = 0; pass < 2; pass++) {
+        for (const vector of basis) remainder = difference(remainder, scaleVector(vector, dot(remainder, vector)));
+      }
+      const norm = Math.hypot(...remainder);
+      if (!best || norm > best.norm) best = {axis, remainder, norm};
+    }
+    basis.push(scaleVector(best.remainder, 1 / best.norm));
+    supplement.push(best);
+  }
+  return {basis, supplement};
+}
+
+function decompose(rows, rank) {
+  const columns = transpose(rows);
+  const gram = columns.map(column => columns.map(other => dot(column, other)));
+  const eig = jacobi(gram);
+  const pairs = transpose(eig.basis).map((v, slot) => ({v, slot, estimate: eig.matrix[slot][slot]}))
+    .sort((a, b) => b.estimate - a.estimate);
+  const triplets = pairs.map(({v, slot}, i) => {
+    const av = timesVector(rows, v);
+    // The quarter-grid editor supplies an exact rank. The Rayleigh quotient preserves small positive values.
+    const lambda = i < rank ? dot(av, av) : 0;
+    return {v, av, slot, lambda, sigma: Math.sqrt(lambda)};
+  }).sort((a, b) => b.sigma - a.sigma);
+  const right = triplets.map(pair => pair.v);
+  const sigma = triplets.map(pair => pair.sigma);
+  const {basis: left, supplement} = completeBasis(triplets.slice(0, rank).map(({av, sigma}) => scaleVector(av, 1 / sigma)), rows.length);
+  const u = transpose(left);
+  const v = transpose(right);
+  const scaled = right.map((col, i) => scaleVector(col, sigma[i]));
+  const reconstructed = multiply(u, scaled);
+  const identityRows = identity(rows.length);
+  return {gram, eig, triplets, right, left, u, v, sigma, scaled, supplement, reconstructed,
+    residual: matrixError(rows, reconstructed),
+    errorU: matrixError(multiply(transpose(u), u), identityRows),
+    errorV: matrixError(multiply(transpose(v), v), identityRows)};
+}
+
+function updateModel() {
+  const {size} = state;
+  const {entries} = current();
+  const actual = size === 2 ? geometry(entries) : geometry3(entries);
+  const a = matrixRows(entries, size, DENOMINATOR);
+  const svd = decompose(a, actual.rank);
+  const detV = detSmall(svd.right) >= 0 ? 1 : -1;
+  const transforms = [
+    {rows: identity(size), rank: size, det: 1, directions: svd.right},
+    {rows: svd.right, rank: size, det: detV, directions: identity(size)},
+    {rows: svd.scaled, rank: actual.rank, det: detV * Math.abs(actual.det) || 0, directions: diagonal(svd.sigma)},
+    {rows: a, rank: actual.rank, det: actual.det, directions: svd.left.map((u, i) => scaleVector(u, svd.sigma[i]))}
+  ];
+  model = {a, actual, svd, transforms};
+  state.iteration = Math.min(state.iteration, Math.max(0, svd.eig.trace.length - 1));
+}
+
+function canvasContext(canvas) {
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  if (!width || !height) return null;
+  const ratio = Math.min(window.devicePixelRatio || 1, 3);
+  const pixelWidth = Math.round(width * ratio);
+  const pixelHeight = Math.round(height * ratio);
+  if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+    canvas.width = pixelWidth;
+    canvas.height = pixelHeight;
+  }
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  return { ctx, width, height, labelLayer: canvas.nextElementSibling, labels: [] };
+}
+
+function makeFrame(canvas, extent) {
+  const surface = canvasContext(canvas);
+  if (!surface) return null;
+  const { width, height } = surface;
+  const scale = (Math.min(width, height) / 2 - 11) / extent;
+  const center = [width / 2, height / 2];
+  const point = ([x, y]) => [center[0] + x * scale, center[1] - y * scale];
+  const valueAt = ([x, y]) => [(x - center[0]) / scale, (center[1] - y) / scale];
+  return { ...surface, point, valueAt, scale, extent };
+}
+
+function line(ctx, start, end) {
+  ctx.beginPath();
+  ctx.moveTo(...start);
+  ctx.lineTo(...end);
+  ctx.stroke();
+}
+
+function circle(ctx, center, size, fill, outline) {
+  ctx.beginPath();
+  ctx.arc(...center, size, 0, 2 * Math.PI);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  if (outline) {
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+}
+
+function arrowhead(ctx, start, tip, size, fill) {
+  const dx = tip[0] - start[0];
+  const dy = tip[1] - start[1];
+  const length = Math.hypot(dx, dy);
+  if (length < 1) return;
+  const ux = dx / length;
+  const uy = dy / length;
+  const half = size * .48;
+  ctx.beginPath();
+  ctx.moveTo(...tip);
+  ctx.lineTo(tip[0] - size * ux - half * uy, tip[1] - size * uy + half * ux);
+  ctx.lineTo(tip[0] - size * ux + half * uy, tip[1] - size * uy - half * ux);
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+}
+
+function coordinates(frame) {
+  const { ctx, point, scale, width, height } = frame;
+  const reachX = width / (2 * scale);
+  const reachY = height / (2 * scale);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "#e2eaf0";
+  for (let k = 1; k <= Math.max(reachX, reachY); k++) {
+    for (const n of [k, -k]) {
+      line(ctx, point([n, -reachY]), point([n, reachY]));
+      line(ctx, point([-reachX, n]), point([reachX, n]));
+    }
+  }
+  ctx.strokeStyle = "#9bb0bf";
+  const xTip = point([reachX - 9 / scale, 0]);
+  const yTip = point([0, reachY - 9 / scale]);
+  line(ctx, point([-reachX, 0]), xTip);
+  line(ctx, point([0, -reachY]), yTip);
+  arrowhead(ctx, point(ORIGIN), xTip, 6, "#8199ab");
+  arrowhead(ctx, point(ORIGIN), yTip, 6, "#8199ab");
+  label(frame, "x", xTip, "#476077", -6, 9);
+  label(frame, "y", yTip, "#476077", 8, -5);
+  label(frame, "0", point(ORIGIN), "#476077", -13, 5);
+}
+
+function drawLattice({ ctx, point }, { transform, rank, vectors }) {
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "#b1c6cf";
+  ctx.setLineDash([4, 4]);
+  if (rank === 2) {
+    for (let k = -2; k <= 2; k++) {
+      line(ctx, point(transform([k, -2])), point(transform([k, 2])));
+      line(ctx, point(transform([-2, k])), point(transform([2, k])));
+    }
+  } else if (rank === 1) {
+    const direction = vectors.find(([x, y]) => x || y);
+    const length = Math.hypot(...direction);
+    const [dx, dy] = direction.map(value => 11 * value / length);
+    line(ctx, point([-dx, -dy]), point([dx, dy]));
+  }
+  ctx.setLineDash([]);
+}
+
+function drawSquare({ ctx, point }, { det, rank, corners }) {
+  const polygon = corners.map(point);
+  const color = det < 0 ? ORANGE : rank === 1 ? "#5c526c" : GREEN;
+  if (rank === 0) {
+    circle(ctx, polygon[0], 5, "#5c526c");
+    return;
+  }
+  ctx.beginPath();
+  ctx.moveTo(...polygon[0]);
+  for (const p of polygon.slice(1)) ctx.lineTo(...p);
+  ctx.closePath();
+  if (rank === 2) {
+    ctx.fillStyle = det > 0 ? "rgba(44, 155, 129, .19)" : "rgba(199, 100, 60, .19)";
+    ctx.fill();
+  }
+  ctx.lineWidth = 2.4;
+  ctx.strokeStyle = color;
+  ctx.stroke();
+  if (rank === 2) {
+    for (const index of [1, 2]) {
+      const start = polygon[index];
+      const end = polygon[index + 1];
+      const length = Math.hypot(end[0] - start[0], end[1] - start[1]);
+      if (length < 19) continue;
+      const tip = start.map((value, i) => value + .60 * (end[i] - value));
+      arrowhead(ctx, start, tip, 7, color);
+    }
+  }
+}
+
+
+function sharedBounds(points, padding = .15) {
+  const center = BASIS3.map((_, i) => {
+    const coordinate = points.map(point => point[i]);
+    return (Math.min(...coordinate) + Math.max(...coordinate)) / 2;
+  });
+  const radius = Math.max(...points.map(point => Math.hypot(...difference(point, center))));
+  return { center, radius: Math.max(1, radius + padding) };
+}
+
+function sceneFrame(canvas, { center, radius }) {
+  const surface = canvasContext(canvas);
+  if (!surface) return null;
+  const { width, height } = surface;
+  const scale = Math.max(1, (Math.min(width, height) / 2 - 13) / radius);
+  const [cy, sy] = [Math.cos(camera.yaw), Math.sin(camera.yaw)];
+  const [cp, sp] = [Math.cos(camera.pitch), Math.sin(camera.pitch)];
+  const project = vector => {
+    const [x, y, z] = difference(vector, center);
+    const forward = sy * x + cy * y;
+    return [width / 2 + scale * (cy * x - sy * y), height / 2 - scale * (cp * z - sp * forward),
+      cp * forward + sp * z];
+  };
+  return { ...surface, scale, project, point: vector => project(vector).slice(0, 2), right: [cy, -sy, 0], up: [-sp * sy, -sp * cy, cp] };
+}
+
+function label({ctx, width, height, labels}, text, tip, color, dx, dy) {
+  ctx.font = "650 14px 'Segoe UI', sans-serif";
+  const textWidth = ctx.measureText(text).width + 4;
+  const x = Math.max(3, Math.min(width - textWidth - 3, tip[0] + dx));
+  const y = Math.max(3, Math.min(height - 19, tip[1] + dy));
+  labels.push({text, x, y, color, opacity: ctx.globalAlpha});
+}
+
+const labelNodes = new WeakMap();
+function positionLabels({labelLayer, labels}) {
+  let nodes = labelNodes.get(labelLayer);
+  if (!nodes) {
+    nodes = [];
+    labelNodes.set(labelLayer, nodes);
+  }
+  for (const [i, data] of labels.entries()) {
+    if (!nodes[i]) {
+      const node = document.createElement("span");
+      node.className = "plot-label";
+      nodes[i] = {node};
+      labelLayer.append(node);
+    }
+    const item = nodes[i];
+    if (item.text !== data.text) {
+      item.node.innerHTML = mathMarkup(data.text);
+      item.text = data.text;
+    }
+    item.node.hidden = false;
+    item.node.style.left = data.x + "px";
+    item.node.style.top = data.y + "px";
+    item.node.style.color = data.color;
+    item.node.style.opacity = data.opacity;
+  }
+  for (const item of nodes.slice(labels.length)) item.node.hidden = true;
+}
+
+function axes3(frame) {
+  const { ctx, point } = frame;
+  const start = point(ORIGIN3);
+  for (const [i, endpoint] of AXIS_TIPS_3D.entries()) {
+    const tip = point(endpoint);
+    const color = "#7f97aa";
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    line(ctx, start, tip);
+    ctx.setLineDash([]);
+    arrowhead(ctx, start, tip, 6, color);
+    label(frame, XYZ[i], tip, "#476077", i === 1 ? -13 : 6, i === 2 ? -12 : 5);
+  }
+}
+
+function closedPath(ctx, points, fill, stroke, width) {
+  if (points.length < 2) return;
+  ctx.beginPath();
+  ctx.moveTo(...points[0]);
+  for (const point of points.slice(1)) ctx.lineTo(...point);
+  ctx.closePath();
+  if (fill) {
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = width;
+    ctx.stroke();
+  }
+}
+
+function convexHull(points) {
+  const sorted = points.slice().sort(([x, y], [u, v]) => x - u || y - v);
+  const unique = sorted.filter((point, i) => i === 0 || Math.hypot(...difference(point, sorted[i - 1])) > 1e-6);
+  if (unique.length < 3) return unique;
+  function halfHull(ordered) {
+    const half = [];
+    for (const point of ordered) {
+      while (half.length >= 2) {
+        const base = half.at(-2);
+        const [x, y] = difference(half.at(-1), base);
+        const [u, v] = difference(point, base);
+        if (x * v - y * u > 1e-7) break;
+        half.pop();
+      }
+      half.push(point);
+    }
+    return half.slice(0, -1);
+  }
+  return halfHull(unique).concat(halfHull(unique.slice().reverse()));
+}
+
+function drawCube(frame, result) {
+  if (!frame) return;
+  const { ctx, point, project } = frame;
+  const { det, rank, corners } = result;
+  axes3(frame);
+  const projected = corners.map(project);
+  const vertices = corners.map(point);
+  if (rank === 3) {
+    const faces = CUBE_FACES.map(face => ({ face, depth: face.reduce((sum, i) => sum + projected[i][2], 0) }));
+    faces.sort((a, b) => a.depth - b.depth);
+    const palette = det > 0 ? ["#167869", "rgba(67, 169, 142, .13)", "rgba(61, 160, 134, .21)"]
+      : ["#a44727", "rgba(199, 100, 60, .13)", "rgba(199, 100, 60, .21)"];
+    for (const [i, {face}] of faces.entries()) {
+      closedPath(ctx, face.map(index => vertices[index]), palette[i < 3 ? 1 : 2], palette[0], i < 3 ? 1 : 1.7);
+    }
+  } else {
+    const hull = convexHull(vertices);
+    if (hull.length === 1) circle(ctx, hull[0], 4.5, VIOLET);
+    else closedPath(ctx, hull, "rgba(113, 94, 178, .21)", VIOLET, 2.4);
+  }
+}
+
+
+const CIRCLE = Array.from({length: 64}, (_, i) => {
+  const angle = 2 * Math.PI * i / 64;
+  return [Math.cos(angle), Math.sin(angle)];
+});
+const SPHERE_MERIDIANS = Array.from({length: 6}, (_, i) => {
+  const angle = Math.PI * i / 6;
+  return CIRCLE.map(([x, y]) => [Math.cos(angle) * x, Math.sin(angle) * x, y]);
+});
+const SPHERE_LATITUDES = [-.84, -.52, 0, .52, .84].map(z => {
+  const radius = Math.sqrt(1 - z * z);
+  return CIRCLE.map(([x, y]) => [radius * x, radius * y, z]);
+});
+const SPHERE_LINES = [...SPHERE_MERIDIANS, ...SPHERE_LATITUDES];
+function combinedAxes(axes, direction) {
+  return axes[0].map((_, i) => direction.reduce((sum, coefficient, j) => sum + coefficient * axes[j][i], 0));
+}
+
+function drawSphere(frame, axes, rank, worldSize) {
+  if (!frame) return;
+  const { ctx, point } = frame;
+  const origin = axes[0].map(() => 0);
+  if (worldSize === 3) axes3(frame);
+  else coordinates(frame);
+
+  if (rank === 0) {
+    circle(ctx, point(origin), 4.5, VIOLET);
+  } else if (rank === 1) {
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = VIOLET;
+    line(ctx, point(scaleVector(axes[0], -1)), point(axes[0]));
+  } else if (worldSize === 2 || rank === 2) {
+    const boundary = CIRCLE.map(direction => point(combinedAxes(axes, direction)));
+    const filled = worldSize === 3 && rank === 2 ? "rgba(42, 146, 124, .17)" : null;
+    closedPath(ctx, boundary, filled, GREEN, 2);
+  } else {
+    for (const curve of SPHERE_LINES) {
+      closedPath(ctx, curve.map(direction => point(combinedAxes(axes, direction))), null, "#68a195", 1.1);
+    }
+  }
+}
+
+
+
+function focusApplies() {
+  return state.highlight?.mode === state.mode;
+}
+
+function isHighlighted(index) {
+  return focusApplies() && state.highlight.indices.includes(index);
+}
+
+function useHandles() {
+  return state.mode === "basis" && state.phase === 3;
+}
+
+function drawVectors(frame, vectors, names, handles) {
+  const {ctx, point} = frame;
+  const origin = point(vectors[0].map(() => 0));
+  const order = vectors.map((_, i) => i).sort((i, j) => Number(isHighlighted(i)) - Number(isHighlighted(j)));
+  if (handles) {
+    const preferred = order.indexOf(current().column);
+    order.push(...order.splice(preferred, 1));
+  }
+  for (const i of order) {
+    const tip = point(vectors[i]);
+    const color = VECTOR_COLORS[i];
+    const length = Math.hypot(...difference(tip, origin));
+    const highlighted = isHighlighted(i);
+    ctx.globalAlpha = focusApplies() && !highlighted ? .36 : 1;
+    if (length > 1) {
+      ctx.lineWidth = highlighted ? 4.1 : 2.8;
+      ctx.strokeStyle = color;
+      line(ctx, origin, tip);
+      arrowhead(ctx, origin, tip, Math.min(9, length / 2), color);
+    }
+    if (handles || highlighted || length < 1) {
+      circle(ctx, tip, handles && current().column === i ? 5.4 : 4, "#fff", color);
+    }
+    label(frame, names[i], tip, color, 6, [-16, 5, -31][i]);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawNullBasisDirection(frame) {
+  const {highlight, phase, mode} = state;
+  if (mode !== "svd" || phase !== 3 || highlight?.source !== "U") return;
+  const [index] = highlight.indices;
+  if (model.svd.sigma[index] !== 0) return;
+  const vector = model.svd.left[index];
+  const {ctx, point} = frame;
+  const endpoint = point(vector);
+  ctx.strokeStyle = VECTOR_COLORS[index];
+  ctx.lineWidth = 1.7;
+  ctx.setLineDash([5, 4]);
+  line(ctx, point(vector.map(() => 0)), endpoint);
+  ctx.setLineDash([]);
+  label(frame, "u" + sub(index + 1), endpoint, VECTOR_COLORS[index], 6, -16);
+}
+
+function calculatedBounds() {
+  const {size, mode} = state;
+  if (mode === "svd") {
+    const radius = Math.max(1.47, model.svd.sigma[0] + .21);
+    return size === 3 ? {center: ORIGIN3, radius} : radius;
+  }
+  const corners = size === 2 ? UNIT_SQUARE : CUBE;
+  const allCorners = model.transforms.flatMap(transform => corners.map(vertex => timesVector(transform.rows, vertex)));
+  return size === 3 ? sharedBounds([...allCorners, ...AXIS_TIPS_3D]) : Math.max(1.84, ...allCorners.flat().map(Math.abs)) + .19;
+}
+
+function shapeName(rank, size, mode) {
+  if (rank < 2) return rank === 0 ? "点" : "线段";
+  if (mode === "basis") return size === 2 ? "平行四边形" : rank === 2 ? "平面多边形" : "平行六面体";
+  return size === 2 ? "椭圆" : rank === 2 ? "椭圆盘" : "椭球面";
+}
+
+function stageArrowName(i) {
+  const k = sub(i + 1);
+  if (state.mode === "basis") return (state.phase === 0 ? "e" : state.phase === 3 ? "Ae" : "Te") + k;
+  return ["v" + k, "e" + k, "σ" + k + "e" + k, "σ" + k + "u" + k][state.phase];
+}
+
+function drawPanel(frame, transform, isTarget) {
+  if (!frame) return;
+  const {size, mode} = state;
+  const coordinatesOfBasis = transpose(transform.rows);
+  const {rank, det} = transform;
+  if (mode === "basis") {
+    if (size === 3) {
+      drawCube(frame, {rank, det, corners: CUBE.map(vertex => timesVector(transform.rows, vertex))});
+    } else {
+      const transformPoint = point => timesVector(transform.rows, point);
+      const corners = UNIT_SQUARE.map(transformPoint);
+      coordinates(frame);
+      if (isTarget) drawLattice(frame, {transform: transformPoint, rank, vectors: coordinatesOfBasis});
+      drawSquare(frame, {rank, det, corners});
+    }
+  } else {
+    drawSphere(frame, transform.directions, rank, size);
+  }
+  const vectors = mode === "basis" ? coordinatesOfBasis : transform.directions;
+  if (isTarget) drawNullBasisDirection(frame);
+  const names = vectors.map((_, i) => isTarget ? stageArrowName(i) : (mode === "basis" ? "e" : "v") + sub(i + 1));
+  drawVectors(frame, vectors, names, isTarget && useHandles());
+  positionLabels(frame);
+}
+
+function draw() {
+  boardBounds = gesture?.kind === "column" ? gesture.bounds : calculatedBounds();
+  const make = canvas => state.size === 3 ? sceneFrame(canvas, boardBounds) : makeFrame(canvas, boardBounds);
+  frameOnRight = make(image);
+  drawPanel(make(domain), model.transforms[0], false);
+  drawPanel(frameOnRight, model.transforms[state.phase], true);
+}
+
+function updateView() {
+  const {phase, size, mode, highlight} = state;
+  const {det, rank, directions, rows} = model.transforms[phase];
+  const svdMode = mode === "svd";
+  const is3d = size === 3;
+  const shape = svdMode ? (is3d ? "单位球面" : "单位圆") : (is3d ? "单位立方体" : "单位正方形");
+  byId("show-basis").setAttribute("aria-pressed", !svdMode);
+  byId("show-singular").setAttribute("aria-pressed", svdMode);
+  for (const button of phaseButtons) button.setAttribute("aria-pressed", Number(button.dataset.phase) === phase);
+  setRich(byId("phase-title"), PHASE_TITLES[phase]);
+  byId("domain-description").textContent = shape + (svdMode ? "与右奇异方向" : "与标准基");
+  byId("image-description").textContent = shapeName(rank, size, mode) + (svdMode ? "与变换后的奇异方向" : "与矩阵列");
+  const instructions = useHandles() ? "拖动右图箭头端点，编辑 ⟦A⟧ 的对应列。" : "切换阶段，查看右图变换 ⟦T⟧ 的效果。";
+  setRich(byId("interaction-help"), instructions
+    + (is3d ? " 拖动空白处或在图上按方向键，两图同步旋转。" : ""));
+  byId("reset-camera").hidden = !is3d;
+  byId("spectrum").hidden = !svdMode;
+  setRich(byId("singular-values"), model.svd.sigma.map((value, i) => mathToken("σ" + sub(i + 1) + " = " + display(value))).join(" "));
+  const detail = byId("direction-detail");
+  detail.hidden = !focusApplies();
+  if (highlight && !detail.hidden) {
+    let relation = highlight.indices.map(i => {
+      const prefix = svdMode ? "v" : "e";
+      const vector = svdMode ? directions[i] : transpose(rows)[i];
+      return mathToken(TRANSFORM_NAMES[phase] + " " + prefix + sub(i + 1) + " = " + vectorText(vector));
+    }).join("　");
+    if (highlight.source === "U" && phase === 3 && model.svd.sigma[highlight.indices[0]] === 0) {
+      relation += "。虚线表示 ⟦U⟧ 中补入的单位方向，像向量位于原点。";
+    }
+    setRich(detail, relation);
+  }
+  const unitMeasure = svdMode ? (is3d ? 4 * Math.PI / 3 : Math.PI) : 1;
+  const measureName = is3d ? "体积" : "面积";
+  const letter = phase === 3 ? "A" : "T";
+  setRich(byId("det-label"), "行列式 " + mathToken("det " + letter));
+  setRich(byId("rank-label"), "秩 " + mathToken("rank " + letter));
+  byId("measure-label").textContent = "右图" + (svdMode ? "像所围" : "像的") + measureName;
+  setRich(byId("measure-scope"), "原" + measureName + "为 " + mathToken(svdMode ? (is3d ? "\\frac{4π}{3}" : "π") : "1"));
+  setRich(byId("det"), mathToken(display(det)));
+  setRich(byId("rank"), mathToken(String(rank)));
+  setRich(byId("measure"), mathToken(display(Math.abs(det) * unitMeasure)));
+  byId("orientation").textContent = det > 0 ? "保向" : det < 0 ? "反向" : measureName + "退化";
+  byId("image-space").textContent = "像空间是" + ["原点", "直线", "平面", "三维空间"][rank];
+  domain.setAttribute("aria-label", byId("domain-description").textContent);
+  image.setAttribute("aria-label", byId("phase-title").textContent + "，" + byId("image-description").textContent
+    + "。秩为 " + rank + "，行列式为 " + det + "。");
+
+  inputs.forEach((input, i) => input.classList.toggle("marked", mode === "basis" && isHighlighted(i % size)));
+  columnButtons.forEach((button, i) => button.setAttribute("aria-pressed", i === current().column));
+  draw();
+}
+
+function button(text, handler, className) {
+  const element = document.createElement("button");
+  element.type = "button";
+  setRich(element, text);
+  if (className) element.className = className;
+  element.addEventListener("click", handler);
+  return element;
+}
+
+function selectMode(mode) {
+  state.mode = mode;
+  state.highlight = null;
+  gesture = null;
+  updateView();
+}
+
+function buildEditor() {
+  const {size} = state;
+  const container = byId("matrix-editor");
+  container.classList.toggle("matrix-three", size === 3);
+  inputs = current().entries.map((_, index) => {
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = "-2";
+    input.max = "2";
+    input.step = "0.25";
+    input.setAttribute("aria-label", "第 " + (Math.floor(index / size) + 1) + " 行第 " + (index % size + 1) + " 列");
+    input.setAttribute("aria-describedby", "entry-limits");
+    input.addEventListener("change", () => {
+      if (Number.isFinite(input.valueAsNumber)) {
+        current().entries[index] = toEntry(input.valueAsNumber);
+        current().preset = null;
+      }
+      refresh();
+    });
+    input.addEventListener("keydown", event => { if (event.key === "Enter") input.blur(); });
+    return input;
+  });
+  container.replaceChildren(...inputs);
+  columnButtons = identity(size).map((_, i) => {
+    const pick = button("第 " + (i + 1) + " 列", () => {
+      current().column = i;
+      state.mode = "basis";
+      state.phase = 3;
+      state.highlight = {mode: "basis", indices: [i]};
+      updateView();
+    }, "column-" + (i + 1));
+    pick.title = "优先拖动第 " + (i + 1) + " 列，端点重合时先选列";
+    return pick;
+  });
+  byId("column-picker").replaceChildren(...columnButtons);
+  presetButtons = PRESETS[size].map(([name, entries], i) => button(name, () => {
+    current().entries = entries.slice();
+    current().preset = i;
+    state.highlight = null;
+    refresh();
+  }));
+  byId("examples").replaceChildren(...presetButtons);
+}
+
+function table(name, rows, options = {}) {
+  const figure = document.createElement("figure");
+  figure.className = "factor";
+  const title = document.createElement("figcaption");
+  setRich(title, name);
+  const grid = document.createElement("table");
+  grid.className = "values";
+  grid.setAttribute("aria-label", plainMarkup(name));
+  if (options.headers) {
+    const head = document.createElement("thead");
+    const row = document.createElement("tr");
+    options.headers.forEach(element => {
+      const th = document.createElement("th");
+      th.scope = "col";
+      th.append(element);
+      row.append(th);
+    });
+    head.append(row);
+    grid.append(head);
+  }
+  const body = document.createElement("tbody");
+  rows.forEach((values, i) => {
+    const row = document.createElement("tr");
+    values.forEach((value, j) => {
+      const cell = document.createElement("td");
+      cell.className = options.cellStyle?.(i, j) ?? "";
+      if (options.cellButton) cell.append(options.cellButton(value, i, j));
+      else setRich(cell, mathToken(display(value)));
+      row.append(cell);
+    });
+    body.append(row);
+  });
+  grid.append(body);
+  figure.append(title, grid);
+  return figure;
+}
+
+function paragraph(text, className = "calc-line") {
+  const node = document.createElement("p");
+  node.className = className;
+  setRich(node, text);
+  return node;
+}
+
+function matrixEquation(name, matrix) {
+  const rows = matrix.map(row => {
+    const cells = row.map(entry => "<mtd>" + mathContent(entry) + "</mtd>").join("");
+    return "<mtr>" + cells + "</mtr>";
+  }).join("");
+  const node = document.createElement("div");
+  node.className = "equation";
+  node.innerHTML = '<math display="block">' + mathContent(name + " =")
+    + '<mrow><mo stretchy="true">(</mo><mtable>' + rows + '</mtable><mo stretchy="true">)</mo></mrow></math>';
+  return node;
+}
+
+const operand = x => x < 0 ? "(" + display(x) + ")" : display(x);
+const products = (u, v) => u.map((value, i) => mathToken((i ? "+ " : "") + operand(value) + " × " + operand(v[i]))).join(" ");
+
+function renderGram() {
+  const [selectedRow, selectedCol] = state.gram;
+  const {a, svd} = model;
+  const columns = transpose(a);
+  const marked = (_, j) => j === selectedRow || j === selectedCol ? "marked" : "";
+  const i = sub(selectedRow + 1);
+  const j = sub(selectedCol + 1);
+  const cellButton = (value, row, col) => {
+    const key = "gram-" + row + "-" + col;
+    const cell = button(mathToken(display(value)), () => {
+      state.gram = [row, col];
+      state.mode = "basis";
+      state.phase = 3;
+      state.highlight = {mode: "basis", indices: [...new Set([row, col])]};
+      updateView();
+      renderAlgorithm(key);
+    }, "cell-button");
+    cell.dataset.focusKey = key;
+    cell.setAttribute("aria-label", "G 的第 " + (row + 1) + " 行、第 " + (col + 1) + " 列，" + display(value));
+    cell.setAttribute("aria-pressed", row === selectedRow && col === selectedCol);
+    return cell;
+  };
+  const figures = [table("⟦A⟧ 的列", a, {cellStyle: marked}), table("⟦G₀ = AᵀA⟧", svd.gram, {cellButton})];
+  const details = [paragraph(mathToken("G" + i + j + " = a" + i + "ᵀ a" + j + " =") + " "
+    + products(columns[selectedRow], columns[selectedCol]) + " " + mathToken("= " + display(svd.gram[selectedRow][selectedCol])))];
+  return {figures, details};
+}
+
+function renderJacobi() {
+  const {eig, gram} = model.svd;
+  const k = state.iteration;
+  const step = eig.trace[k];
+  byId("iteration-controls").hidden = !step;
+  if (!step) {
+    return {figures: [table("⟦G₀⟧", gram), table("⟦V₀ = I⟧", eig.basis)],
+      details: [paragraph("⟦G₀⟧ 已满足对角化的停止条件。最大的非对角元绝对值为 " + mathToken(errorText(eig.finalOffDiagonal))
+        + "，容差为 " + mathToken(errorText(eig.tolerance)) + "。")]};
+  }
+  byId("iteration-counter").value = "第 " + (k + 1) + " 轮，共 " + eig.trace.length + " 轮";
+  byId("iteration-prev").disabled = k === 0;
+  byId("iteration-next").disabled = k === eig.trace.length - 1;
+  const {p, q, a, b, d, tau, tangent, cosine, sine} = step;
+  const pivot = (i, j) => (i === p && j === q) || (i === q && j === p) ? "pivot" : "";
+  const g0 = "G" + sub(k);
+  const g1 = "G" + sub(k + 1);
+  const j0 = "J" + sub(k);
+  const v0 = "V" + sub(k);
+  const v1 = "V" + sub(k + 1);
+  const figures = [
+    table(mathToken(g0) + " 更新前", step.before, {cellStyle: pivot}),
+    table(mathToken(j0) + " 平面旋转", step.rotation),
+    table(mathToken(g1 + " = " + j0 + "ᵀ" + g0 + j0), step.after, {cellStyle: pivot}),
+    table(mathToken(v0) + " 累积基", step.basisBefore),
+    table(mathToken(v1 + " = " + v0 + j0), step.basisAfter)
+  ];
+  const symbolicRotation = step.rotation.map(row => row.map(String));
+  symbolicRotation[p][p] = symbolicRotation[q][q] = "c";
+  symbolicRotation[p][q] = "s";
+  symbolicRotation[q][p] = "−s";
+  const equations = document.createElement("div");
+  equations.className = "equation-grid";
+  equations.append(
+    matrixEquation("B", [["a", "b"], ["b", "d"]]),
+    matrixEquation(j0, symbolicRotation),
+    matrixEquation("B^′", [["a − tb", "0"], ["0", "d + tb"]])
+  );
+  const nextOff = Math.abs(largestOffDiagonal(step.after).value);
+  const converged = nextOff <= eig.tolerance;
+  const details = [
+    paragraph("主元 " + mathToken("(p, q) = (" + (p + 1) + ", " + (q + 1) + ")") + "。分别从 "
+      + mathToken(g0) + " 和 " + mathToken(g1) + " 中按 ⟦p, q⟧ 取行和列，得到子块 ⟦B⟧ 和 ⟦B^′⟧。"),
+    equations,
+    paragraph(mathToken("a = {(" + g0 + ")}_{pp} = " + display(a)) + "，"
+      + mathToken("b = {(" + g0 + ")}_{pq} = " + display(b)) + "，"
+      + mathToken("d = {(" + g0 + ")}_{qq} = " + display(d)) + "。"),
+    paragraph(mathToken("τ = \\frac{d − a}{2b} = " + display(tau)) + "。 "
+      + mathToken("t = \\frac{sgn₊(τ)}{\\abs{τ} + \\sqrt{1 + τ²}}") + " " + mathToken("= " + display(tangent))
+      + "，其中 ⟦sgn₊(0) = 1⟧。"),
+    paragraph(mathToken("c = \\frac{1}{\\sqrt{1 + t²}} = " + display(cosine)) + "，"
+      + mathToken("s = tc = " + display(sine)) + "。"),
+    paragraph("更新后最大的非对角元绝对值为 " + mathToken(errorText(nextOff)) + "，停止容差为 " + mathToken(errorText(eig.tolerance))
+      + (converged ? "，对角化完成。" : "。"))
+  ];
+  return {figures, details};
+}
+
+function renderFactors() {
+  const {a, actual, svd} = model;
+  const index = state.direction;
+  const {v, av, sigma, lambda} = svd.triplets[index];
+  const u = svd.left[index];
+  const k = sub(index + 1);
+  function headers(source, prefix) {
+    return svd.triplets.map((_, i) => {
+      const key = source + "-" + i;
+      const control = button(mathToken(prefix + sub(i + 1)), () => {
+        state.direction = i;
+        state.mode = "svd";
+        if (source === "U") state.phase = 3;
+        state.highlight = {mode: "svd", indices: [i], source};
+        updateView();
+        renderAlgorithm(key);
+      }, "column-button column-" + (i + 1));
+      control.dataset.focusKey = key;
+      control.setAttribute("aria-label", "高亮 " + source + " 的第 " + (i + 1) + " 列");
+      control.setAttribute("aria-pressed", i === index);
+      return control;
+    });
+  }
+  const selected = (_, j) => j === index ? "marked" : "";
+  const figures = [
+    table("⟦V⟧ 右奇异向量", svd.v, {headers: headers("V", "v"), cellStyle: selected}),
+    table("⟦Σ⟧ 奇异值", diagonal(svd.sigma)),
+    table("⟦U⟧ 左奇异向量", svd.u, {headers: headers("U", "u"), cellStyle: selected})
+  ];
+  const finalValues = svd.eig.matrix.map((row, i) => row[i]);
+  const order = svd.triplets.map(pair => pair.slot + 1).join("、");
+  const vk = "v" + k;
+  const avk = "Av" + k;
+  const uk = "u" + k;
+  const sk = "σ" + k;
+  const lk = "λ" + k;
+  const details = [
+    paragraph("Jacobi 结束时的对角线为 " + mathToken(vectorText(finalValues))
+      + "。按特征值从大到小取原第 " + order + " 列，得到 ⟦V⟧。", "sort-map"),
+    paragraph(mathToken(vk + " = " + vectorText(v)) + "。"
+      + mathToken(avk) + " 的各分量由 ⟦A⟧ 的每一行分别与 " + mathToken(vk) + " 做内积。"),
+    ...a.map((row, j) => paragraph(mathToken("{(" + avk + ")}" + sub(j + 1) + " =") + " "
+      + products(row, v) + " " + mathToken("= " + display(av[j])))),
+    paragraph(mathToken(lk + " = \\norm{" + avk + "}² = " + display(lambda)) + "，"
+      + mathToken(sk + " = \\sqrt{" + lk + "} = " + display(sigma)) + "。")
+  ];
+  if (sigma > 0) {
+    details.push(paragraph(mathToken(uk + " = \\frac{" + avk + "}{" + sk + "}") + " " + mathToken("= " + vectorText(u)) + "。"));
+  } else {
+    const supplement = svd.supplement[index - actual.rank];
+    details.push(paragraph(mathToken(sk) + " 为零。将 " + mathToken("e" + sub(supplement.axis + 1))
+      + " 对已有的 ⟦u⟧ 向量正交化，得到余向量 " + mathToken("r = " + vectorText(supplement.remainder))
+      + "。归一化后 " + mathToken(uk + " = \\frac{r}{\\norm{r}}") + " " + mathToken("= " + vectorText(u)) + "。"));
+  }
+  return {figures, details};
+}
+
+function renderVerification() {
+  const {a, svd} = model;
+  return {
+    figures: [table("⟦A⟧", a), table("⟦UΣVᵀ⟧", svd.reconstructed)],
+    details: [
+      paragraph("重构误差　" + mathToken("\\norm{A − UΣVᵀ}_F = " + errorText(svd.residual))),
+      paragraph("正交误差　" + mathToken("\\norm{UᵀU − I}_F = " + errorText(svd.errorU)) + " "
+        + mathToken("\\norm{VᵀV − I}_F = " + errorText(svd.errorV)))
+    ]
+  };
+}
+
+function renderAlgorithm(refocus) {
+  const {step} = state;
+  setRich(byId("step-explanation"), STEP_TEXTS[step]);
+  byId("iteration-controls").hidden = true;
+  stepButtons.forEach(control => control.setAttribute("aria-pressed", Number(control.dataset.svdStep) === step));
+  const {figures, details} = [renderGram, renderJacobi, renderFactors, renderVerification][step]();
+  const list = byId("factor-list");
+  list.replaceChildren(...figures);
+  byId("step-detail").replaceChildren(...details);
+  if (refocus) list.querySelector('[data-focus-key="' + refocus + '"]')?.focus({preventScroll: true});
+}
+
+function refresh() {
+  updateModel();
+  inputs.forEach((input, i) => { input.value = current().entries[i] / DENOMINATOR; });
+  presetButtons.forEach((preset, i) => preset.setAttribute("aria-pressed", current().preset === i));
+  updateView();
+  renderAlgorithm();
+}
+
+function switchDimension(size) {
+  state.size = size;
+  state.gram = [0, 1];
+  state.direction = 0;
+  state.highlight = null;
+  state.iteration = 0;
+  gesture = null;
+  byId("lecture-title").textContent = size === 3 ? "三维线性变换" : "二维线性变换";
+  byId("choose-2d").setAttribute("aria-pressed", size === 2);
+  byId("choose-3d").setAttribute("aria-pressed", size === 3);
+  byId("dimension-2").hidden = size !== 2;
+  byId("dimension-3").hidden = size !== 3;
+  for (const canvas of [domain, image]) {
+    canvas.dataset.orbit = String(size === 3);
+    canvas.tabIndex = size === 3 ? 0 : -1;
+  }
+  buildEditor();
+  refresh();
+}
+
+function locate(canvas, event) {
+  const bounds = canvas.getBoundingClientRect();
+  return [event.clientX - bounds.left - canvas.clientLeft, event.clientY - bounds.top - canvas.clientTop];
+}
+
+function hitColumn(position) {
+  if (!useHandles() || !frameOnRight) return -1;
+  const vectors = transpose(model.a);
+  const distances = vectors.map(vector => Math.hypot(...difference(position, frameOnRight.point(vector))));
+  const nearest = Math.min(...distances);
+  if (nearest > 18) return -1;
+  const preferred = current().column;
+  return distances[preferred] <= Math.min(18, nearest + 4) ? preferred : distances.indexOf(nearest);
+}
+
+function rotateCamera(dx, dy) {
+  const pole = Math.PI / 2 - .1;
+  camera.yaw = (camera.yaw + dx) % (2 * Math.PI);
+  camera.pitch = Math.max(-pole, Math.min(pole, camera.pitch + dy));
+  draw();
+}
+
+function dragColumn(event) {
+  const [cx, cy] = locate(image, event);
+  const {first, start, scale, right, up, index} = gesture;
+  const dx = (cx - first[0]) / scale;
+  const dy = (first[1] - cy) / scale;
+  const next = start.map((value, i) => toEntry(value + dx * right[i] + dy * up[i]));
+  const {entries} = current();
+  if (next.every((value, i) => value === entries[i * state.size + index])) return;
+  next.forEach((value, i) => { entries[i * state.size + index] = value; });
+  current().preset = null;
+  refresh();
+}
+
+function attachPointer(canvas) {
+  canvas.addEventListener("pointerdown", event => {
+    if (gesture || event.button !== 0 || (event.pointerType === "touch" && !touchActive)) return;
+    if (inputs.includes(document.activeElement)) document.activeElement.blur();
+    const position = locate(canvas, event);
+    const index = canvas === image ? hitColumn(position) : -1;
+    if (index >= 0) {
+      const {scale, right = [1, 0], up = [0, 1]} = frameOnRight;
+      current().column = index;
+      gesture = {kind: "column", canvas, pointer: event.pointerId, bounds: boardBounds,
+        start: transpose(model.a)[index], first: position, scale, right, up, index};
+      state.highlight = {mode: "basis", indices: [index]};
+      updateView();
+    } else if (state.size === 3) {
+      gesture = {kind: "orbit", canvas, pointer: event.pointerId, last: position};
+    } else return;
+    canvas.setPointerCapture(event.pointerId);
+    canvas.style.cursor = gesture.kind === "column" ? "move" : "grabbing";
+  });
+  canvas.addEventListener("pointermove", event => {
+    if (event.pointerType === "touch" && !touchActive) return;
+    if (!gesture) {
+      const hit = canvas === image && hitColumn(locate(canvas, event)) >= 0;
+      canvas.style.cursor = hit ? "move" : state.size === 3 ? "grab" : "default";
+      return;
+    }
+    if (gesture.canvas !== canvas || gesture.pointer !== event.pointerId) return;
+    if (gesture.kind === "column") {
+      dragColumn(event);
+    } else {
+      const position = locate(canvas, event);
+      const [dx, dy] = difference(position, gesture.last);
+      gesture.last = position;
+      rotateCamera(.011 * dx, -.011 * dy);
+    }
+  });
+  const stop = event => {
+    if (gesture?.canvas !== canvas || gesture.pointer !== event.pointerId) return;
+    const rescale = gesture.kind === "column";
+    gesture = null;
+    canvas.style.cursor = state.size === 3 ? "grab" : "default";
+    if (rescale) draw();
+  };
+  for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) canvas.addEventListener(type, stop);
+  canvas.addEventListener("keydown", event => {
+    const shift = {ArrowLeft: [-.12, 0], ArrowRight: [.12, 0], ArrowUp: [0, .1], ArrowDown: [0, -.1]}[event.key];
+    if (state.size !== 3 || gesture || !shift) return;
+    event.preventDefault();
+    rotateCamera(...shift);
+  });
+}
+
+for (const canvas of [domain, image]) attachPointer(canvas);
+byId("choose-2d").addEventListener("click", () => switchDimension(2));
+byId("choose-3d").addEventListener("click", () => switchDimension(3));
+byId("show-basis").addEventListener("click", () => selectMode("basis"));
+byId("show-singular").addEventListener("click", () => selectMode("svd"));
+byId("touch-toggle").addEventListener("click", event => {
+  touchActive = !touchActive;
+  byId("comparison").dataset.touchActive = String(touchActive);
+  event.currentTarget.setAttribute("aria-pressed", touchActive);
+  event.currentTarget.textContent = touchActive ? "结束图形操作" : "操作图形";
+});
+byId("reset-camera").addEventListener("click", () => {
+  camera = {...INITIAL_CAMERA};
+  draw();
+});
+for (const control of phaseButtons) {
+  control.addEventListener("click", () => {
+    state.phase = Number(control.dataset.phase);
+    gesture = null;
+    updateView();
+  });
+}
+for (const control of stepButtons) {
+  control.addEventListener("click", () => {
+    state.step = Number(control.dataset.svdStep);
+    renderAlgorithm();
+  });
+}
+byId("iteration-prev").addEventListener("click", () => {
+  state.iteration = Math.max(0, state.iteration - 1);
+  renderAlgorithm();
+});
+byId("iteration-next").addEventListener("click", () => {
+  state.iteration = Math.min(model.svd.eig.trace.length - 1, state.iteration + 1);
+  renderAlgorithm();
+});
+const resize = new ResizeObserver(() => { if (model) draw(); });
+resize.observe(domain);
+resize.observe(image);
+switchDimension(2);
+</script>
+</body>
+</html>
