@@ -19,7 +19,9 @@ def table(path):
 
         book = load_workbook(path, read_only=True, data_only=True)
         try:
-            for row in book.active.iter_rows():
+            # Excel remembers the last tab the teacher viewed before saving.
+            sheet = book["学生名单与分配"] if {"学生名单与分配", "主题目录"}.issubset(book.sheetnames) else book.active
+            for row in sheet.iter_rows():
                 values = []
                 for cell in row:
                     value = cell.value

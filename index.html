@@ -273,9 +273,17 @@
     font-size: 1.03em;
   }
   button math, output math { color: inherit; }
+  math[data-rendered] {
+    position: absolute !important; left: 0; width: 1px !important; height: 1px !important;
+    margin: -1px !important; padding: 0 !important; border: 0 !important;
+    overflow: hidden !important; clip: rect(0, 0, 0, 0); clip-path: inset(50%); white-space: nowrap;
+  }
+  .course-math-visual { color: inherit; font-size: 1.03em; white-space: nowrap; }
+  .course-math-visual svg { display: inline-block; overflow: visible; }
+  .theorem-equation .course-math-visual { font-size: 1.18rem; }
   .equation, .factor { min-width: 0; max-width: 100%; overflow-x: auto; }
   .equation { display: flex; justify-content: safe center; }
-  .equation > math { flex: 0 0 auto; }
+  .equation > math, .equation > .course-math-visual { flex: 0 0 auto; margin-inline: auto; }
   .calc-line { overflow-wrap: anywhere; }
   .calc-line math { white-space: nowrap; }
   .header-link { white-space: nowrap; }
@@ -321,6 +329,10 @@
     .handles .examples { margin-top: .59rem; }
     .matrix-three { grid-template-columns: repeat(3, minmax(0, 3.6rem)); }
     .equation-grid { grid-template-columns: minmax(0, 1fr); }
+    .desk { grid-template-columns: minmax(0, 1fr); }
+    .definition .keep-phrase { display: inline; white-space: normal; }
+    .equation { justify-content: flex-start; }
+    .calc-line, .svd .facts li, #direction-detail { max-width: 100%; overflow-x: auto; }
     .step-content { padding: .64rem; }
     .steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .steps button { padding-inline: .28rem; }
@@ -551,18 +563,23 @@
     </section>
   </article>
 </main>
+<script src="./assets/course-math.js"></script>
 <script>
 "use strict";
+const renderCourseFormulas = window.renderCourseMath || function () {};
 
 const MATH_OPERATORS = new Set(["det", "rank", "dim", "span", "sgn", "max"]);
-const MATH_SUBSCRIPTS = {"₀":"0","₁":"1","₂":"2","₃":"3","₄":"4","₅":"5","₆":"6","₇":"7","₈":"8","₉":"9","ᵢ":"i","ⱼ":"j","ₖ":"k","ₚ":"p","ᵩ":"q","₊":"+"};
-const MATH_SUPERSCRIPTS = {"ᵀ":"⊤","²":"2","³":"3"};
+const MATH_SUBSCRIPTS = new Map([
+  ["₀","0"], ["₁","1"], ["₂","2"], ["₃","3"], ["₄","4"], ["₅","5"], ["₆","6"], ["₇","7"], ["₈","8"], ["₉","9"],
+  ["ᵢ","i"], ["ⱼ","j"], ["ₖ","k"], ["ₚ","p"], ["ᵩ","q"], ["₊","+"]
+]);
+const MATH_SUPERSCRIPTS = new Map([["ᵀ","⊤"], ["²","2"], ["³","3"]]);
 const escapeMarkup = text => String(text).replace(/[&<>"]/g, symbol => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;"})[symbol]);
 const mathTag = (tag, raw) => "<" + tag + ">" + escapeMarkup(raw) + "</" + tag + ">";
 const mathRow = children => "<mrow>" + children + "</mrow>";
 
 function mathContent(expression) {
-  const tokens = expression.match(/\\[a-z]+|\d+(?:\.\d+)?(?:e[−+\-]?\d+)?|det|rank|dim|span|sgn|max|[^\s]/gu) ?? [];
+  const tokens = expression.match(/\\[a-z]+|\d+(?:\.\d+)?(?:e[−+\-]?\d+)?|det|rank|dim|span|sgn|max|[^\s]/gu) || [];
   let i = 0;
   function glyph(token) {
     if (/^\d/.test(token)) {
@@ -607,12 +624,12 @@ function mathContent(expression) {
         } else if (next === "^") {
           i++;
           upper = atom();
-        } else if (Object.hasOwn(MATH_SUBSCRIPTS, next)) {
+        } else if (MATH_SUBSCRIPTS.has(next)) {
           let subscripts = "";
-          while (Object.hasOwn(MATH_SUBSCRIPTS, tokens[i])) subscripts += glyph(MATH_SUBSCRIPTS[tokens[i++]]);
+          while (MATH_SUBSCRIPTS.has(tokens[i])) subscripts += glyph(MATH_SUBSCRIPTS.get(tokens[i++]));
           lower = mathRow(subscripts);
-        } else if (Object.hasOwn(MATH_SUPERSCRIPTS, next)) {
-          upper = glyph(MATH_SUPERSCRIPTS[tokens[i++]]);
+        } else if (MATH_SUPERSCRIPTS.has(next)) {
+          upper = glyph(MATH_SUPERSCRIPTS.get(tokens[i++]));
         } else break;
       }
       if (lower && upper) result += "<msubsup>" + base + lower + upper + "</msubsup>";
@@ -630,7 +647,8 @@ const mathToken = expression => "⟦" + expression + "⟧";
 const MATH_DELIMITERS = /⟦([^⟧]+)⟧/g;
 function richMarkup(source) {
   let result = "", offset = 0;
-  for (const match of String(source).matchAll(MATH_DELIMITERS)) {
+  let match;
+  while ((match = MATH_DELIMITERS.exec(source)) !== null) {
     result += escapeMarkup(source.slice(offset, match.index)) + mathMarkup(match[1]);
     offset = match.index + match[0].length;
   }
@@ -639,6 +657,12 @@ function richMarkup(source) {
 const plainMarkup = source => String(source).replace(MATH_DELIMITERS, "$1");
 function setRich(node, source) {
   node.innerHTML = richMarkup(source);
+  renderCourseFormulas(node);
+}
+
+function setChildren(node, children) {
+  node.textContent = "";
+  node.append(...children);
 }
 
 const DENOMINATOR = 4;
@@ -674,7 +698,8 @@ const STEP_TEXTS = [
   "用未舍入的因子重构 ⟦A⟧，并检查 ⟦U⟧ 和 ⟦V⟧ 的列是否构成标准正交基。"
 ];
 const state = {size: 2, mode: "basis", phase: 3, step: 0, iteration: 0, gram: [0, 1], direction: 0, highlight: null};
-const matrices = Object.fromEntries([2, 3].map(size => [size, {entries: PRESETS[size][0][1].slice(), preset: 0, column: 0}]));
+const matrices = {};
+for (const size of [2, 3]) matrices[size] = {entries:PRESETS[size][0][1].slice(), preset:0, column:0};
 const current = () => matrices[state.size];
 const byId = id => document.getElementById(id);
 const domain = byId("domain");
@@ -738,7 +763,11 @@ const multiply = (a, b) => {
   const columns = transpose(b);
   return a.map(row => columns.map(col => dot(row, col)));
 };
-const matrixError = (a, b) => Math.hypot(...a.flatMap((row, i) => difference(row, b[i])));
+function matrixError(a, b) {
+  const errors = [];
+  a.forEach((row, i) => errors.push(...difference(row, b[i])));
+  return Math.hypot(...errors);
+}
 const detSmall = rows => rows.length === 2
   ? rows[0][0] * rows[1][1] - rows[0][1] * rows[1][0]
   : dot(rows[0], cross(rows[1], rows[2]));
@@ -1057,6 +1086,7 @@ function positionLabels({labelLayer, labels}) {
     const item = nodes[i];
     if (item.text !== data.text) {
       item.node.innerHTML = mathMarkup(data.text);
+      renderCourseFormulas(item.node);
       item.text = data.text;
     }
     item.node.hidden = false;
@@ -1109,8 +1139,8 @@ function convexHull(points) {
     const half = [];
     for (const point of ordered) {
       while (half.length >= 2) {
-        const base = half.at(-2);
-        const [x, y] = difference(half.at(-1), base);
+        const base = half[half.length - 2];
+        const [x, y] = difference(half[half.length - 1], base);
         const [u, v] = difference(point, base);
         if (x * v - y * u > 1e-7) break;
         half.pop();
@@ -1189,7 +1219,7 @@ function drawSphere(frame, axes, rank, worldSize) {
 
 
 function focusApplies() {
-  return state.highlight?.mode === state.mode;
+  return state.highlight && state.highlight.mode === state.mode;
 }
 
 function isHighlighted(index) {
@@ -1230,7 +1260,7 @@ function drawVectors(frame, vectors, names, handles) {
 
 function drawNullBasisDirection(frame) {
   const {highlight, phase, mode} = state;
-  if (mode !== "svd" || phase !== 3 || highlight?.source !== "U") return;
+  if (mode !== "svd" || phase !== 3 || !highlight || highlight.source !== "U") return;
   const [index] = highlight.indices;
   if (model.svd.sigma[index] !== 0) return;
   const vector = model.svd.left[index];
@@ -1251,8 +1281,14 @@ function calculatedBounds() {
     return size === 3 ? {center: ORIGIN3, radius} : radius;
   }
   const corners = size === 2 ? UNIT_SQUARE : CUBE;
-  const allCorners = model.transforms.flatMap(transform => corners.map(vertex => timesVector(transform.rows, vertex)));
-  return size === 3 ? sharedBounds([...allCorners, ...AXIS_TIPS_3D]) : Math.max(1.84, ...allCorners.flat().map(Math.abs)) + .19;
+  const allCorners = [];
+  for (const transform of model.transforms) {
+    for (const vertex of corners) allCorners.push(timesVector(transform.rows, vertex));
+  }
+  if (size === 3) return sharedBounds([...allCorners, ...AXIS_TIPS_3D]);
+  let extent = 1.84;
+  for (const [x, y] of allCorners) extent = Math.max(extent, Math.abs(x), Math.abs(y));
+  return extent + .19;
 }
 
 function shapeName(rank, size, mode) {
@@ -1293,7 +1329,7 @@ function drawPanel(frame, transform, isTarget) {
 }
 
 function draw() {
-  boardBounds = gesture?.kind === "column" ? gesture.bounds : calculatedBounds();
+  boardBounds = gesture && gesture.kind === "column" ? gesture.bounds : calculatedBounds();
   const make = canvas => state.size === 3 ? sceneFrame(canvas, boardBounds) : makeFrame(canvas, boardBounds);
   frameOnRight = make(image);
   drawPanel(make(domain), model.transforms[0], false);
@@ -1390,7 +1426,7 @@ function buildEditor() {
     input.addEventListener("keydown", event => { if (event.key === "Enter") input.blur(); });
     return input;
   });
-  container.replaceChildren(...inputs);
+  setChildren(container, inputs);
   columnButtons = identity(size).map((_, i) => {
     const pick = button("第 " + (i + 1) + " 列", () => {
       current().column = i;
@@ -1402,14 +1438,14 @@ function buildEditor() {
     pick.title = "优先拖动第 " + (i + 1) + " 列，端点重合时先选列";
     return pick;
   });
-  byId("column-picker").replaceChildren(...columnButtons);
+  setChildren(byId("column-picker"), columnButtons);
   presetButtons = PRESETS[size].map(([name, entries], i) => button(name, () => {
     current().entries = entries.slice();
     current().preset = i;
     state.highlight = null;
     refresh();
   }));
-  byId("examples").replaceChildren(...presetButtons);
+  setChildren(byId("examples"), presetButtons);
 }
 
 function table(name, rows, options = {}) {
@@ -1437,7 +1473,7 @@ function table(name, rows, options = {}) {
     const row = document.createElement("tr");
     values.forEach((value, j) => {
       const cell = document.createElement("td");
-      cell.className = options.cellStyle?.(i, j) ?? "";
+      cell.className = options.cellStyle ? options.cellStyle(i, j) || "" : "";
       if (options.cellButton) cell.append(options.cellButton(value, i, j));
       else setRich(cell, mathToken(display(value)));
       row.append(cell);
@@ -1465,6 +1501,7 @@ function matrixEquation(name, matrix) {
   node.className = "equation";
   node.innerHTML = '<math display="block">' + mathContent(name + " =")
     + '<mrow><mo stretchy="true">(</mo><mtable>' + rows + '</mtable><mo stretchy="true">)</mo></mrow></math>';
+  renderCourseFormulas(node);
   return node;
 }
 
@@ -1633,9 +1670,12 @@ function renderAlgorithm(refocus) {
   stepButtons.forEach(control => control.setAttribute("aria-pressed", Number(control.dataset.svdStep) === step));
   const {figures, details} = [renderGram, renderJacobi, renderFactors, renderVerification][step]();
   const list = byId("factor-list");
-  list.replaceChildren(...figures);
-  byId("step-detail").replaceChildren(...details);
-  if (refocus) list.querySelector('[data-focus-key="' + refocus + '"]')?.focus({preventScroll: true});
+  setChildren(list, figures);
+  setChildren(byId("step-detail"), details);
+  if (refocus) {
+    const control = list.querySelector('[data-focus-key="' + refocus + '"]');
+    if (control) control.focus({preventScroll: true});
+  }
 }
 
 function refresh() {
@@ -1738,7 +1778,7 @@ function attachPointer(canvas) {
     }
   });
   const stop = event => {
-    if (gesture?.canvas !== canvas || gesture.pointer !== event.pointerId) return;
+    if (!gesture || gesture.canvas !== canvas || gesture.pointer !== event.pointerId) return;
     const rescale = gesture.kind === "column";
     gesture = null;
     canvas.style.cursor = state.size === 3 ? "grab" : "default";
@@ -1789,9 +1829,14 @@ byId("iteration-next").addEventListener("click", () => {
   state.iteration = Math.min(model.svd.eig.trace.length - 1, state.iteration + 1);
   renderAlgorithm();
 });
-const resize = new ResizeObserver(() => { if (model) draw(); });
-resize.observe(domain);
-resize.observe(image);
+const redraw = () => { if (model) draw(); };
+if (window.ResizeObserver) {
+  const resize = new ResizeObserver(redraw);
+  resize.observe(domain);
+  resize.observe(image);
+} else {
+  window.addEventListener("resize", redraw);
+}
 switchDimension(2);
 </script>
 </body>

@@ -3,7 +3,8 @@ const $ = id => document.getElementById(id);
 const prefix = "mathjk.cg.2026.";
 const saved = key => sessionStorage.getItem(prefix + key);
 const save = (key, value) => value == null ? sessionStorage.removeItem(prefix + key) : sessionStorage.setItem(prefix + key, value);
-const date = iso => new Intl.DateTimeFormat("zh-CN", {timeZone:"Asia/Shanghai",dateStyle:"medium",timeStyle:"medium",hour12:false}).format(new Date(iso));
+const clock = new Intl.DateTimeFormat("zh-CN", {timeZone:"Asia/Shanghai",year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false});
+const date = iso => clock.format(new Date(iso));
 const fmt = version => "v" + version.version + " · " + version.filename + " · " + date(version.time) + (version.late ? "（补交）" : "");
 const el = (tag, text) => Object.assign(document.createElement(tag), {textContent:text});
 let course, me, busy = false;
@@ -34,7 +35,7 @@ async function api(path, {json, bytes, headers = {}, ...options} = {}) {
 
 function uploadInfo() {
   const number = Number($("topic").value);
-  const topic = me?.topics.find(t => t.number === number);
+  const topic = me && me.topics.find(t => t.number === number);
   if (!topic) return;
   $("one-topic").textContent = "第 " + number + " 题　" + topic.title;
   const latest = topic.versions[0];
@@ -44,7 +45,7 @@ function uploadInfo() {
 
 function historyRows() {
   const list = $("records");
-  list.replaceChildren();
+  list.textContent = "";
   for (const topic of me.topics) {
     const row = el("article", "");
     row.className = "record";
@@ -80,11 +81,12 @@ function render() {
   }
   $("login").hidden = !course || Boolean(me);
   $("account").hidden = !me;
-  $("upload-panel").hidden = !me?.topics.length || viewing;
-  $("history-panel").hidden = !me?.topics.length || !viewing;
+  const hasTopics = me && me.topics.length > 0;
+  $("upload-panel").hidden = !hasTopics || viewing;
+  $("history-panel").hidden = !hasTopics || !viewing;
   $("no-topics").hidden = !me || me.topics.length > 0;
   if (!course) return;
-  const p = me?.policy || course.policy;
+  const p = me ? me.policy : course.policy;
   const closed = p.deadline && Date.now() > Date.parse(p.deadline) && !p.allowLate;
   $("policy").textContent = ["ZIP 上限 " + p.maxMiB + " MiB", p.deadline ? "截止 " + date(p.deadline) + "（北京时间）" : "截止时间待定",
     ...(p.deadline ? [p.allowLate ? "截止后可补交或更新" : "截止后停止提交和更新"] : [])].join("　·　");
@@ -98,7 +100,8 @@ function render() {
   $("bind").hidden = Boolean(me.github) || !course.githubAvailable;
   $("bind").disabled = $("logout").disabled = busy;
   const selected = Number($("topic").value);
-  $("topic").replaceChildren(...me.topics.map(t => new Option("第 " + t.number + " 题　" + t.title, t.number)));
+  $("topic").options.length = 0;
+  for (const t of me.topics) $("topic").add(new Option("第 " + t.number + " 题　" + t.title, t.number));
   if (me.topics.some(t => t.number === selected)) $("topic").value = String(selected);
   $("choose-label").hidden = me.topics.length < 2;
   $("one-topic").hidden = me.topics.length !== 1;
@@ -125,7 +128,8 @@ async function run(action) {
 
 $("roster-form").addEventListener("submit", event => {
   event.preventDefault();
-  const json = Object.fromEntries(new FormData(event.currentTarget));
+  const data = new FormData(event.currentTarget);
+  const json = {name:data.get("name"), id:data.get("id"), college:data.get("college")};
   run(async () => accept(await api("/api/roster", {json})));
 });
 $("topic").addEventListener("change", () => { $("archive").value = ""; notice(); uploadInfo(); });
@@ -149,6 +153,15 @@ function url64(bytes) {
 }
 const sha = async data => url64(await crypto.subtle.digest("SHA-256", data));
 
+function uploadId() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  const hex = Array.from(bytes, value => ("0" + value.toString(16)).slice(-2)).join("");
+  return [hex.slice(0,8), hex.slice(8,12), hex.slice(12,16), hex.slice(16,20), hex.slice(20)].join("-");
+}
+
 async function startGitHub(mode) {
   const verifier = url64(crypto.getRandomValues(new Uint8Array(32)));
   const challenge = await sha(new TextEncoder().encode(verifier));
@@ -167,10 +180,10 @@ $("upload-form").addEventListener("submit", event => {
   run(async () => {
     if (!/\.zip$/i.test(file.name)) throw Error("请选择 ZIP 压缩包。");
     if (file.size > me.policy.maxMiB * 1024 * 1024) throw Error("文件超过 " + me.policy.maxMiB + " MiB。");
-    const bytes = await file.arrayBuffer();
+    const bytes = await new Response(file).arrayBuffer();
     const fingerprint = JSON.stringify([me.id, topic, file.name, await sha(bytes)]);
     const pending = JSON.parse(saved("upload") || "null");
-    const key = pending?.fingerprint === fingerprint ? pending.key : crypto.randomUUID();
+    const key = pending && pending.fingerprint === fingerprint ? pending.key : uploadId();
     save("upload", JSON.stringify({fingerprint, key}));
     notice("正在保存 ZIP，请稍候…");
     const version = await api("/api/topics/" + topic + "/upload", {bytes,
@@ -190,7 +203,7 @@ async function boot() {
   const pending = callback && JSON.parse(saved("oauth") || "null");
   if (callback) {
     save("oauth", null);
-    history.replaceState(null, "", location.pathname + (pending?.hash || "#mine"));
+    history.replaceState(null, "", location.pathname + (pending && pending.hash || "#mine"));
   }
   try {
     course = await api("/api/course");
