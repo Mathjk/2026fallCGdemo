@@ -33,7 +33,7 @@ async function main() {
   if (!token) throw Error("请先用有权访问作业私库的 GitHub 账号登录 Git。");
   const store = await privateRepositoryStore(token);
   for (let attempt=0; attempt<7; attempt++) {
-    const snap = await store.snapshot();
+    const snap = await store.snapshot({includeRoster:true});
     const files = [];
     if (mode === "unbind") {
       if (!snap.ledger.bindings.some(b => b.id === args[0])) throw Error("这个学号没有 GitHub 绑定。");

@@ -28,7 +28,9 @@ async function api(path, {json, bytes, headers = {}, ...options} = {}) {
   try { data = await response.json(); } catch { throw Error("收交服务暂时未能响应，请稍后重试。"); }
   if (!response.ok) {
     if (response.status === 401 && token === saved("session")) { save("session", null); me = null; render(); }
-    throw Error(data.error || "操作未成功，请重试。");
+    const error = Error(data.error || "操作未成功，请重试。");
+    error.status = response.status;
+    throw error;
   }
   return data;
 }
@@ -36,22 +38,26 @@ async function api(path, {json, bytes, headers = {}, ...options} = {}) {
 function uploadInfo() {
   const number = Number($("topic").value);
   const topic = me && me.topics.find(t => t.number === number);
-  if (!topic) return;
-  $("one-topic").textContent = "第 " + number + " 题　" + topic.title;
-  const latest = topic.versions[0];
-  $("previous").textContent = latest ? "最近成功提交　" + fmt(latest) + "。更新后可在「我的作业」查看历史版本。" : "提交成功后可在「我的作业」查看回执。";
+  const latest = topic && topic.versions[0];
+  if ($("send").disabled && !busy) {
+    $("previous").textContent = "当前没有可新交的主题。已提交的同学可从「我的作业」进入并更新。";
+  } else {
+    $("previous").textContent = latest ? "最近成功提交　" + fmt(latest) + "。更新后可查看历史版本。" : "";
+  }
   $("send").textContent = busy ? "正在保存…" : latest ? "更新 ZIP" : "提交 ZIP";
 }
 
 function historyRows() {
   const list = $("records");
   list.textContent = "";
-  for (const topic of me.topics) {
+  const submitted = me.topics.filter(t => t.versions.length);
+  if (!submitted.length) list.append(el("p", "你还没有提交作业。"));
+  for (const topic of submitted) {
     const row = el("article", "");
     row.className = "record";
     const head = el("div", "");
     head.className = "record-head";
-    const action = el("button", topic.versions.length ? "更新 ZIP" : "提交 ZIP");
+    const action = el("button", "更新 ZIP");
     action.type = "button";
     action.addEventListener("click", () => {
       $("topic").value = String(topic.number);
@@ -59,7 +65,7 @@ function historyRows() {
       location.hash = "submit";
     });
     head.append(el("h3", "第 " + topic.number + " 题　" + topic.title), action);
-    row.append(head, el("p", topic.versions[0] ? "最近成功提交　" + fmt(topic.versions[0]) : "待提交"));
+    row.append(head, el("p", "最近成功提交　" + fmt(topic.versions[0])));
     if (topic.versions.length > 1) {
       const details = el("details", "");
       const versions = el("ol", "");
@@ -69,6 +75,27 @@ function historyRows() {
     }
     list.append(row);
   }
+}
+
+function selectTopics(list) {
+  const select = $("topic");
+  const previous = select.value;
+  const atLimit = me && list.filter(t => t.status === "mine").length >= me.studentTopicLimit;
+  select.options.length = 0;
+  select.add(new Option("请选择主题", ""));
+  let available = 0;
+  for (const t of list) {
+    const suffix = t.status === "mine" ? "（我的 v" + t.versions[0].version + "）" : t.status === "taken" ? "（已有提交）" : "";
+    const option = new Option("第 " + t.number + " 题　" + t.title + suffix, t.number);
+    option.disabled = t.status === "taken" || (atLimit && t.status !== "mine");
+    select.add(option);
+    if (!option.disabled) {
+      available++;
+      if (option.value === previous) select.value = previous;
+    }
+  }
+  if (previous && !select.value) $("archive").value = "";
+  return available;
 }
 
 function render() {
@@ -81,39 +108,38 @@ function render() {
   }
   $("login").hidden = !course || Boolean(me);
   $("account").hidden = !me;
-  const hasTopics = me && me.topics.length > 0;
-  $("upload-panel").hidden = !hasTopics || viewing;
-  $("history-panel").hidden = !hasTopics || !viewing;
-  $("no-topics").hidden = !me || me.topics.length > 0;
+  $("upload-panel").hidden = !course || viewing;
+  $("history-panel").hidden = !me || !viewing;
   if (!course) return;
   const p = me ? me.policy : course.policy;
-  const closed = p.deadline && Date.now() > Date.parse(p.deadline) && !p.allowLate;
+  const closed = p.deadline && Date.now() >= Date.parse(p.deadline) && !p.allowLate;
   $("policy").textContent = ["ZIP 上限 " + p.maxMiB + " MiB", p.deadline ? "截止 " + date(p.deadline) + "（北京时间）" : "截止时间待定",
     ...(p.deadline ? [p.allowLate ? "截止后可补交或更新" : "截止后停止提交和更新"] : [])].join("　·　");
-  $("identity-fields").disabled = busy || !course.published;
-  $("login-intro").textContent = course.published ? "请按课程名单填写，再查看分配给你的主题。" : "老师尚未发布名单和主题分配，发布后即可在这里提交作业。";
-  $("github-option").hidden = !course.githubAvailable || !course.published;
+  $("identity-fields").disabled = busy || Boolean(me);
+  $("lookup").hidden = !viewing;
+  $("lookup").disabled = busy;
+  $("login-intro").textContent = viewing ? "使用首次提交时填写的信息或已绑定的 GitHub 账号查看记录。" : "请填写本人信息，提交成功后可在「我的作业」查看或更新。";
+  $("github-option").hidden = !course.githubAvailable;
   $("github-login").disabled = busy;
-  if (!me) return;
-  $("student-name").textContent = me.name;
-  $("student-meta").textContent = [me.id, me.college, me.github ? "GitHub @" + me.github : ""].filter(Boolean).join(" · ");
-  $("bind").hidden = Boolean(me.github) || !course.githubAvailable;
-  $("bind").disabled = $("logout").disabled = busy;
-  const selected = Number($("topic").value);
-  $("topic").options.length = 0;
-  for (const t of me.topics) $("topic").add(new Option("第 " + t.number + " 题　" + t.title, t.number));
-  if (me.topics.some(t => t.number === selected)) $("topic").value = String(selected);
-  $("choose-label").hidden = me.topics.length < 2;
-  $("one-topic").hidden = me.topics.length !== 1;
-  $("upload-fields").disabled = Boolean(closed) || busy;
+  const available = selectTopics(me ? me.topics : course.topics);
+  $("upload-fields").disabled = Boolean(closed) || busy || viewing;
+  $("send").disabled = available === 0;
   uploadInfo();
-  historyRows();
-  for (const button of $("records").querySelectorAll("button")) button.disabled = Boolean(closed) || busy;
+  if (me) {
+    $("student-name").textContent = me.name;
+    $("student-meta").textContent = [me.id, me.college, me.github ? "GitHub @" + me.github : ""].filter(Boolean).join(" · ");
+    $("bind").hidden = Boolean(me.github) || !course.githubAvailable;
+    $("bind").disabled = $("logout").disabled = busy;
+    if (viewing) {
+      historyRows();
+      for (const button of $("records").querySelectorAll("button")) button.disabled = Boolean(closed) || busy;
+    }
+  }
 }
 
 function accept(data) {
   save("session", data.token);
-  $("roster-form").reset();
+  for (const field of $("identity-fields").querySelectorAll("input")) field.value = "";
   me = data.student;
 }
 
@@ -126,26 +152,27 @@ async function run(action) {
   finally { busy = false; render(); }
 }
 
-$("roster-form").addEventListener("submit", event => {
-  event.preventDefault();
-  const data = new FormData(event.currentTarget);
-  const json = {name:data.get("name"), id:data.get("id"), college:data.get("college")};
-  run(async () => accept(await api("/api/roster", {json})));
-});
 $("topic").addEventListener("change", () => { $("archive").value = ""; notice(); uploadInfo(); });
 $("logout").addEventListener("click", () => {
   save("session", null); save("oauth", null); save("upload", null);
-  me = null; $("archive").value = ""; notice("已退出。"); render();
+  me = null; $("work-form").reset(); notice("已退出。"); render();
+  refresh().catch(error => notice(error.message, true));
 });
+async function refresh() {
+  const token = saved("session");
+  if (token) {
+    const updated = await api("/api/me");
+    if (token === saved("session")) me = updated;
+  } else {
+    course = await api("/api/course");
+  }
+  render();
+}
 window.addEventListener("hashchange", async () => {
   if (!busy) notice();
   render();
-  if (!mine() || !me || busy) return;
-  const token = saved("session");
-  try {
-    const updated = await api("/api/me");
-    if (token === saved("session") && mine()) { me = updated; render(); }
-  } catch (error) { if (mine()) notice(error.message, true); }
+  if (busy || !course) return;
+  try { await refresh(); } catch (error) { notice(error.message, true); }
 });
 
 function url64(bytes) {
@@ -172,26 +199,49 @@ async function startGitHub(mode) {
 $("github-login").addEventListener("click", () => run(() => startGitHub("login")));
 $("bind").addEventListener("click", () => run(() => startGitHub("bind")));
 
-$("upload-form").addEventListener("submit", event => {
+$("work-form").addEventListener("submit", event => {
   event.preventDefault();
+  const data = new FormData(event.currentTarget);
+  const json = {name:data.get("name"), id:data.get("id"), college:data.get("college")};
+  if (mine()) {
+    if (!me) run(async () => accept(await api("/api/enter", {json})));
+    return;
+  }
   const file = $("archive").files[0];
   const topic = Number($("topic").value);
-  if (!file || !me) return;
+  if (!file || !topic) return;
+  const selected = me && me.topics.find(t => t.number === topic);
+  const latest = selected && selected.versions[0];
+  const expected = latest ? latest.version : 0;
   run(async () => {
     if (!/\.zip$/i.test(file.name)) throw Error("请选择 ZIP 压缩包。");
-    if (file.size > me.policy.maxMiB * 1024 * 1024) throw Error("文件超过 " + me.policy.maxMiB + " MiB。");
+    const limit = (me ? me.policy : course.policy).maxMiB;
+    if (file.size > limit * 1024 * 1024) throw Error("文件超过 " + limit + " MiB。");
+    if (!me) accept(await api("/api/enter", {json}));
     const bytes = await new Response(file).arrayBuffer();
     const fingerprint = JSON.stringify([me.id, topic, file.name, await sha(bytes)]);
     const pending = JSON.parse(saved("upload") || "null");
-    const key = pending && pending.fingerprint === fingerprint ? pending.key : uploadId();
-    save("upload", JSON.stringify({fingerprint, key}));
+    const attempt = pending && pending.fingerprint === fingerprint && Number.isInteger(pending.expected)
+      ? pending : {fingerprint, key:uploadId(), expected};
+    save("upload", JSON.stringify(attempt));
     notice("正在保存 ZIP，请稍候…");
-    const version = await api("/api/topics/" + topic + "/upload", {bytes,
-      headers:{"Content-Type":"application/zip","X-Filename":encodeURIComponent(file.name),"Idempotency-Key":key}});
+    let version;
+    try {
+      version = await api("/api/topics/" + topic + "/upload", {bytes, headers:{"Content-Type":"application/zip",
+        "X-Filename":encodeURIComponent(file.name), "Idempotency-Key":attempt.key, "X-Expected-Version":String(attempt.expected)}});
+    } catch (error) {
+      if (error.status === 409) {
+        save("upload", null);
+        try { await refresh(); } catch { /* Keep the original submission error visible. */ }
+      }
+      throw error;
+    }
     save("upload", null);
     $("archive").value = "";
     const entry = me.topics.find(t => t.number === topic);
-    entry.versions = [version, ...entry.versions.filter(v => v.version !== version.version)];
+    entry.status = "mine";
+    entry.versions = [version, ...entry.versions.filter(v => v.version !== version.version)].sort((a,b) => b.version-a.version);
+    course.topics.find(t => t.number === topic).status = "taken";
     notice("提交成功　" + fmt(version) + "（北京时间）");
   });
 });

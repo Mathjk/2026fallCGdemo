@@ -68,19 +68,24 @@ export async function privateRepositoryStore(token) {
   requireThat(repository.private === true, 503, "作业仓库需要设为私有。");
   const branch = encodeURIComponent(repository.default_branch);
   return {
-    async snapshot() {
+    async snapshot({includeRoster = false} = {}) {
       const head = (await json("/git/ref/heads/" + branch)).object.sha;
-      if (snapshotCache?.head === head) return structuredClone(snapshotCache);
+      if (snapshotCache?.head === head && (!includeRoster || snapshotCache.rosterLoaded)) return structuredClone(snapshotCache);
       const file = name => json("/contents/" + name + "?ref=" + head, {raw:true});
-      const [commit, roster, policy, ledger] = await Promise.all([json("/git/commits/" + head), file("roster.json"), file("policy.json"), file("ledger.json")]);
+      const [commit, policy, ledger] = await Promise.all([json("/git/commits/" + head), file("policy.json"), file("ledger.json")]);
+      let roster = [];
+      let rosterLoaded = false;
       try {
-        checkRoster(roster);
         checkPolicy(policy);
-        requireThat(Array.isArray(ledger.bindings) && Array.isArray(ledger.submissions), 422, "记录格式有误。");
+        ledger.students ??= [];
+        requireThat([ledger.students, ledger.bindings, ledger.submissions].every(Array.isArray), 422, "记录格式有误。");
+        const profiles = new Set(ledger.students.map(s => s.id));
+        rosterLoaded = includeRoster || [...ledger.bindings, ...ledger.submissions].some(s => !profiles.has(s.id));
+        if (rosterLoaded) roster = checkRoster(await file("roster.json"));
       } catch {
         throw new CourseError(503, "课程数据需要老师检查，请稍后再试。");
       }
-      snapshotCache = {head, tree:commit.tree.sha, roster, policy, ledger};
+      snapshotCache = {head, tree:commit.tree.sha, roster, rosterLoaded, policy, ledger};
       return structuredClone(snapshotCache);
     },
     async blob(bytes) {
@@ -90,7 +95,7 @@ export async function privateRepositoryStore(token) {
       const tree = files.map(file => ({mode:"100644", type:"blob", ...file}));
       const nextTree = await json("/git/trees", {method:"POST",body:{base_tree:snapshot.tree, tree}});
       const next = await json("/git/commits", {method:"POST",body:{message, tree:nextTree.sha, parents:[snapshot.head]}});
-      // Only fast-forward from the snapshot used for assignment, binding and version checks.
+      // Recheck topic ownership, identity and versions if another commit wins this race.
       const response = await request("/git/refs/heads/" + branch, {method:"PATCH",body:{sha:next.sha, force:false}});
       if ([409,422].includes(response.status)) { await response.body?.cancel(); return false; }
       await checked(response);

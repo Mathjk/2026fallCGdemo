@@ -1,9 +1,10 @@
 export const topics = [
-  "曲面参数化", "曲线曲面求交", "Bézier 方法求交（变差缩减性）", "B-B 曲面 C¹ 光滑",
-  "割角磨光法、细分方法", "曲线光顺设计", "稀疏逼近方法", "最小二乘拟合", "多元样条",
-  "Bézier 曲线与曲面", "B 样条曲面", "累加弦长样条曲线", "Coons 曲面", "Bézier 细分法求交",
-  "有理曲线与曲面", "Shepard 方法、径向基函数法", "神经网络法", "曲面的微分几何基础",
-  "Powell–Sabin 细分方法（曲面）", "Catmull–Clark 细分（曲面）"
+  "曲面参数化（保角变换）", "曲面参数化（其他变换）", "曲线曲面求交", "Bézier 方法求交（变差缩减性）",
+  "B-B 曲面 C¹ 光滑", "割角磨光法", "曲线光顺设计", "稀疏逼近方法", "最小二乘拟合",
+  "多元样条（Morgan–Scott 剖分）", "Bézier 曲线与曲面", "B 样条曲线与曲面", "累加弦长样条曲线",
+  "Coons 曲面", "Bézier 细分法求交", "有理曲线与曲面", "Shepard 方法", "径向基函数法",
+  "卷积神经网络可视化", "U-Net 可视化", "PointNet 可视化", "曲面的微分几何基础",
+  "Powell–Sabin 与 Catmull–Clark 细分"
 ];
 
 export class CourseError extends Error {
@@ -19,8 +20,18 @@ export function requireThat(condition, status, message) {
 
 export const clean = value => typeof value === "string" ? value.normalize("NFC").trim() : "";
 export const MiB = 1024 * 1024;
+export const studentTopicLimit = 3;
 export const defaultPolicy = { maxMiB: 10, deadline: null, allowLate: false };
-export const emptyLedger = () => ({ bindings: [], submissions: [] });
+export const emptyLedger = () => ({ students: [], bindings: [], submissions: [] });
+
+export function studentDetails(input) {
+  const id = clean(input.id);
+  const name = clean(input.name);
+  const college = clean(input.college);
+  requireThat(/^[A-Za-z0-9_-]{1,48}$/.test(id), 400, "请填写有效学号，可使用数字、字母、连字符或下划线。");
+  requireThat([name, college].every(v => v && v.length <= 100 && !/[\x00-\x1f\x7f]/.test(v)), 400, "请填写姓名和学院。");
+  return {id, name, college};
+}
 
 export function checkRoster(students) {
   requireThat(Array.isArray(students), 422, "名单格式有误。");
@@ -34,7 +45,7 @@ export function checkRoster(students) {
     const assigned = student.topics;
     requireThat(Array.isArray(assigned) && assigned.length <= 3 && new Set(assigned).size === assigned.length, 422, "每人最多分配三个不同主题。");
     for (const topic of assigned) {
-      requireThat(Number.isInteger(topic) && topic >= 1 && topic <= topics.length, 422, "主题编号范围为 1 至 20。");
+      requireThat(Number.isInteger(topic) && topic >= 1 && topic <= topics.length, 422, "主题编号范围为 1 至 " + topics.length + "。");
       counts.set(topic, (counts.get(topic) || 0) + 1);
       requireThat(counts.get(topic) <= 3, 422, "第 " + topic + " 题分配人数超过三人。");
     }
@@ -50,24 +61,48 @@ export function checkPolicy(policy) {
 }
 
 export function authorize(snapshot, claims) {
-  const student = snapshot.roster.find(s => s.id === claims.id);
-  requireThat(student, 401, "名单已调整，请重新进入。");
-  const binding = snapshot.ledger.bindings.find(b => b.id === student.id);
+  const {ledger} = snapshot;
+  const binding = ledger.bindings.find(b => b.id === claims.id);
   requireThat((binding?.githubId ?? null) === claims.githubId, 401, "登录方式已变更，请重新进入。");
-  return student;
+  let known = ledger.students?.find(s => s.id === claims.id);
+  // Pre-existing receipts and GitHub bindings used the separate roster for identity.
+  if (!known && (binding || claims.name === undefined || ledger.submissions.some(s => s.id === claims.id))) {
+    known = snapshot.roster.find(s => s.id === claims.id);
+  }
+  if (claims.name === undefined) {
+    requireThat(known, 401, "请重新填写个人信息。");
+    return studentDetails(known);
+  }
+  const profile = studentDetails(claims);
+  requireThat(!known || (known.name === profile.name && known.college === profile.college), 403,
+    "该学号已有记录，请按首次提交或绑定时填写的姓名和学院进入。");
+  return profile;
+}
+
+export function rememberStudent(ledger, profile) {
+  ledger.students ??= [];
+  if (!ledger.students.some(s => s.id === profile.id)) ledger.students.push(profile);
+}
+
+export function topicList(ledger, studentId) {
+  return topics.map((title, i) => {
+    const number = i + 1;
+    const entries = ledger.submissions.filter(s => s.topic === number);
+    const topic = {number, title, status:entries.length ? "taken" : "open"};
+    if (studentId !== undefined) {
+      topic.versions = entries.filter(s => s.id === studentId).map(receipt).reverse();
+      if (topic.versions.length) topic.status = "mine";
+    }
+    return topic;
+  });
 }
 
 export function studentView(snapshot, claims) {
   const student = authorize(snapshot, claims);
-  const own = snapshot.ledger.submissions.filter(s => s.id === student.id);
   const binding = snapshot.ledger.bindings.find(b => b.id === student.id);
   return {
     name: student.name, id: student.id, college: student.college, github: binding?.login || null,
-    topics: student.topics.map(number => ({
-      number, title: topics[number - 1],
-      versions: own.filter(s => s.topic === number).map(receipt).reverse()
-    })),
-    policy: snapshot.policy
+    topics:topicList(snapshot.ledger, student.id), policy:snapshot.policy, studentTopicLimit
   };
 }
 
@@ -107,25 +142,26 @@ function cell(value) {
 }
 
 export function teacherReport(roster, ledger) {
-  const lines = ["# 2026 秋计算几何课程作业", "", "[名单、分配和截止设置](https://github.com/Mathjk/2026fallCGdemo/blob/main/_worker/README.md)", "", "## 按学生查看", "", "| 学号 | 姓名 | 学院 | 主题 | 最近成功版本 |", "|---|---|---|---|---|"];
+  const lines = ["# 2026 秋计算几何课程作业", "", "[收交规则和截止设置](https://github.com/Mathjk/2026fallCGdemo/blob/main/_worker/README.md)", "", "## 按学生查看", "", "| 学号 | 姓名 | 学院 | 主题 | 最近成功版本 |", "|---|---|---|---|---|"];
   const latest = new Map(ledger.submissions.map(s => [s.id + "/" + s.topic, s]));
+  const people = new Map([...roster, ...(ledger.students || [])].map(s => [s.id, s]));
   const versionLink = s => s ? "[v" + s.version + "](" + s.path + ")" : "待提交";
-  for (const s of roster) {
-    if (!s.topics.length) lines.push("| " + [s.id, s.name, s.college, "待分配", "—"].map(cell).join(" | ") + " |");
-    for (const t of s.topics) lines.push("| " + [s.id, s.name, s.college, t + " " + topics[t-1]].map(cell).join(" | ") + " | " + versionLink(latest.get(s.id + "/" + t)) + " |");
+  const current = [...latest.values()].sort((a,b) => a.id.localeCompare(b.id) || a.topic-b.topic);
+  for (const s of current) {
+    lines.push("| " + [s.id,s.name,people.get(s.id)?.college || "—",s.topic + " " + topics[s.topic-1]].map(cell).join(" | ") + " | " + versionLink(s) + " |");
   }
-  if (!roster.length) lines.push("", "尚未导入学生名单。");
-  lines.push("", "## 按主题查看", "", "| 主题 | 已分配学生及当前版本 |", "|---|---|");
+  if (!current.length) lines.push("", "尚无成功提交。");
+  lines.push("", "## 按主题查看", "", "| 主题 | 提交学生及当前版本 |", "|---|---|");
   topics.forEach((title, i) => {
     const t = i + 1;
-    const users = roster.filter(s => s.topics.includes(t)).map(s => cell(s.name) + "（" + cell(s.id) + "）" + versionLink(latest.get(s.id + "/" + t)));
-    lines.push("| " + t + " " + title + " | " + (users.join("、") || "待分配") + " |");
+    const owners = current.filter(s => s.topic === t).map(s => cell(s.name) + "（" + cell(s.id) + "）" + versionLink(s));
+    lines.push("| " + t + " " + title + " | " + (owners.join("、") || "可提交") + " |");
   });
   lines.push("", "## 全部成功提交", "", "| 北京时间 | 学号 | 姓名 | 主题 | 版本 | 原文件名 | 登录方式 |", "|---|---|---|---|---|---|---|");
   const clock = new Intl.DateTimeFormat("sv-SE", {timeZone:"Asia/Shanghai",dateStyle:"short",timeStyle:"medium"});
   for (const s of ledger.submissions.slice().reverse()) {
     lines.push("| " + [clock.format(new Date(s.time)) + (s.late ? "（补交）" : ""), s.id, s.name, s.topic].map(cell).join(" | ") + " | " +
-      versionLink(s) + " | " + cell(s.filename) + " | " + (s.githubId ? "GitHub " + cell(s.githubId) : "名单匹配") + " |");
+      versionLink(s) + " | " + cell(s.filename) + " | " + (s.githubId ? "GitHub " + cell(s.githubId) : s.selfReported ? "自行填报" : "名单匹配") + " |");
   }
   return lines.join("\n") + "\n";
 }

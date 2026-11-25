@@ -30,7 +30,7 @@ function zip(content) {
   return Buffer.concat([local,name,data,directory,name,end]);
 }
 
-function fixture(roster=[alpha,beta]) {
+function fixture(roster=[]) {
   const db = {head:0, roster:structuredClone(roster),policy:{...defaultPolicy},ledger:emptyLedger()};
   const files = new Map();
   const store = {
@@ -50,65 +50,123 @@ function fixture(roster=[alpha,beta]) {
     const res = await handle(req, env, async()=>store, identify);
     return {status:res.status, data:await res.json()};
   };
-  const login = async s => (await request("roster",{json:s})).data.token;
-  const upload = (token, topic, bytes, key=now(), filename="作业.zip") => request("topics/"+topic+"/upload",
-    {bytes,token,headers:{"Idempotency-Key":key,"X-Filename":encodeURIComponent(filename)}});
+  const login = async s => (await request("enter",{json:s})).data.token;
+  const upload = (token, topic, bytes, {key=now(), filename="作业.zip", expected=0}={}) => request("topics/"+topic+"/upload",
+    {bytes,token,headers:{"Idempotency-Key":key,"X-Filename":encodeURIComponent(filename),"X-Expected-Version":String(expected)}});
   return {db,store,files,request,login,upload};
 }
 
-test("empty roster, three-field lookup, only assigned topics and no-assignment state",async()=>{
-  const empty = fixture([]);
-  assert.equal((await empty.request("course")).data.published,false);
-  assert.equal((await empty.request("roster",{json:alpha})).status,409);
-  const f = fixture([alpha,{...beta,topics:[]}]);
-  assert.equal((await f.request("roster",{json:{...alpha,college:"其他学院"}})).status,403);
+test("self-reported entry exposes 23 topics without reserving a place or storing a visitor",async()=>{
+  const f = fixture();
+  const course = (await f.request("course")).data;
+  assert.equal(course.published,true);
+  assert.equal(course.topics.length,23);
+  assert.ok(course.topics.every(t=>t.status==="open"));
+  assert.equal((await f.request("enter",{json:{...alpha,id:"../01"}})).status,400);
+  assert.equal((await f.request("enter",{json:{...alpha,college:" "}})).status,400);
   const a = await f.login(alpha);
   const view = await f.request("me",{token:a});
-  assert.deepEqual(view.data.topics.map(t=>t.number),[8,14]);
-  assert.deepEqual((await f.request("me",{token:await f.login(beta)})).data.topics,[]);
-  assert.equal((await f.upload(a,3,zip("bad topic"))).status,403);
-  assert.equal((await f.upload(null,8,zip("unclaimed"))).status,401);
-  f.db.roster[0].topics = [];
-  assert.equal((await f.upload(a,8,zip("revoked"))).status,403);
+  assert.equal(view.data.id,alpha.id);
+  assert.equal(view.data.topics[22].number,23);
+  assert.equal((await f.request("roster",{json:beta})).status,200);
+  assert.equal(f.db.head,0);
+  assert.deepEqual(f.db.ledger.students,[]);
+  assert.equal((await f.upload(a,24,zip("invalid topic"))).status,404);
+  assert.equal((await f.upload(null,23,zip("unsigned"))).status,401);
 });
 
-test("parallel students, parallel revisions and retry retain each ZIP exactly once",async()=>{
+test("one owner for a topic, explicit updates, retry receipts and private history",async()=>{
   const f=fixture(), a=await f.login(alpha), b=await f.login(beta), key=now();
-  const first=await f.upload(a,8,zip("one"),key);
+  const first=await f.upload(a,23,zip("one"),{key});
   assert.equal(first.data.version,1);
-  assert.deepEqual(await f.upload(a,8,zip("one"),key),first);
-  assert.equal((await f.upload(a,8,zip("other"),key)).status,409);
-  const replies=await Promise.all([f.upload(a,8,zip("two")),f.upload(a,8,zip("three")),f.upload(b,8,zip("beta"))]);
-  assert.deepEqual(replies.map(r=>r.status),[200,200,200]);
-  assert.deepEqual(replies.slice(0,2).map(r=>r.data.version).sort(),[2,3]);
-  assert.equal(replies[2].data.version,1);
-  assert.equal(f.db.ledger.submissions.length,4);
-  assert.equal(f.files.get("submissions/topic-08/TEST001/v1.zip"),url64(zip("one")));
-  assert.equal(f.files.get("submissions/topic-08/TEST002/v1.zip"),url64(zip("beta")));
-  const report=f.files.get("README.md");
-  assert.match(report,/全部成功提交/);
-  for (const s of f.db.ledger.submissions) assert.ok(report.includes(s.path));
-  assert.deepEqual((await f.request("me",{token:b})).data.topics[0].versions.map(v=>v.version),[1]);
+  assert.deepEqual(await f.upload(a,23,zip("one"),{key}),first);
+  assert.equal((await f.upload(a,23,zip("different"),{key})).status,409);
+  assert.equal((await f.upload(a,23,zip("second first submission"))).status,409);
+  assert.equal((await f.upload(b,23,zip("other student"))).status,409);
+  assert.equal((await f.upload(b,23,zip("other student update"),{expected:1})).status,409);
+  const changed=await f.upload(await f.login(alpha),23,zip("two"),{expected:1});
+  assert.equal(changed.data.version,2);
+  assert.deepEqual(await f.upload(a,23,zip("one"),{key}),first);
+  assert.equal(f.db.ledger.students.length,1);
+  assert.equal(f.db.ledger.submissions.length,2);
+  assert.equal(f.files.get("submissions/topic-23/TEST001/v1.zip"),url64(zip("one")));
+  assert.equal(f.files.get("submissions/topic-23/TEST001/v2.zip"),url64(zip("two")));
+  assert.deepEqual((await f.request("me",{token:a})).data.topics[22].versions.map(v=>v.version),[2,1]);
+  const otherView=(await f.request("me",{token:b})).data.topics[22];
+  assert.equal(otherView.status,"taken");
+  assert.deepEqual(otherView.versions,[]);
+  const listing=await f.request("course");
+  assert.equal(listing.data.topics[22].status,"taken");
+  assert.ok(!JSON.stringify(listing.data).includes(alpha.id));
+  for (const s of f.db.ledger.submissions) assert.ok(f.files.get("README.md").includes(s.path));
+  assert.equal((await f.request("enter",{json:{...alpha,name:"不同姓名"}})).status,403);
+  assert.equal((await f.request("enter",{json:{...alpha,college:"不同学院"}})).status,403);
 });
 
-test("deadline, late policy, size and format, unsuccessful updates preserve the current version",async()=>{
+test("concurrent first submissions and stale updates each have exactly one winner",async()=>{
+  const f=fixture(), a=await f.login(alpha), b=await f.login(beta);
+  const firsts=await Promise.all([f.upload(a,1,zip("A")), f.upload(b,1,zip("B"))]);
+  assert.deepEqual(firsts.map(r=>r.status).sort(),[200,409]);
+  const winner=firsts[0].status===200?a:b;
+  const updates=await Promise.all([f.upload(winner,1,zip("left"),{expected:1}), f.upload(winner,1,zip("right"),{expected:1})]);
+  assert.deepEqual(updates.map(r=>r.status).sort(),[200,409]);
+  assert.deepEqual(f.db.ledger.submissions.map(s=>s.version),[1,2]);
+  assert.equal(new Set(f.db.ledger.submissions.map(s=>s.id)).size,1);
+});
+
+test("all 23 catalog entries accept one first submission, reject the next student and allow an owner update",async()=>{
+  for (let topic=1; topic<=23; topic++) {
+    const f=fixture(), a=await f.login(alpha), b=await f.login(beta);
+    assert.equal((await f.upload(a,topic,zip("first"))).data.version,1);
+    assert.equal((await f.upload(b,topic,zip("another"))).status,409);
+    assert.equal((await f.upload(a,topic,zip("update"),{expected:1})).data.version,2);
+    assert.deepEqual(f.db.ledger.submissions.map(s=>s.id),[alpha.id,alpha.id]);
+  }
+});
+
+test("an early unbound session with different personal details cannot update a later winner's work",async()=>{
+  const f=fixture();
+  const alternate=await f.login({...alpha,name:"另一位填报者"});
+  const owner=await f.login(alpha);
+  assert.equal((await f.upload(owner,2,zip("owner"))).status,200);
+  assert.equal((await f.upload(alternate,2,zip("incorrect name"),{expected:1})).status,403);
+  assert.equal((await f.request("me",{token:alternate})).status,403);
+  assert.equal(f.db.ledger.submissions.length,1);
+});
+
+test("the personal three-topic limit survives a race; existing work can still be updated",async()=>{
+  const f=fixture(), a=await f.login(alpha);
+  await f.upload(a,1,zip("one"));
+  await f.upload(a,2,zip("two"));
+  const contenders=await Promise.all([f.upload(a,3,zip("three")),f.upload(a,4,zip("four"))]);
+  assert.deepEqual(contenders.map(r=>r.status).sort(),[200,409]);
+  assert.equal((await f.upload(a,1,zip("revised"),{expected:1})).data.version,2);
+  const b=await f.login(beta);
+  assert.equal((await f.upload(b,5,zip("separate"))).status,200);
+});
+
+test("deadline is exclusive, late policy and failed ZIPs preserve the current version",async t=>{
+  const cutoff = new Date("2026-12-31T23:59:00+08:00").getTime();
+  t.mock.timers.enable({apis:["Date"],now:cutoff-1});
   const f=fixture(), a=await f.login(alpha), bytes=zip("first");
+  f.db.policy.deadline = "2026-12-31T23:59:00+08:00";
   assert.equal((await f.upload(a,8,bytes)).status,200);
-  f.db.policy.deadline = "2020-01-01T00:00:00+08:00";
-  assert.equal((await f.upload(a,8,bytes)).status,403);
+  t.mock.timers.setTime(cutoff);
+  assert.equal((await f.upload(a,8,bytes,{expected:1})).status,403);
+  assert.equal((await f.upload(a,9,bytes)).status,403);
   f.db.policy.allowLate = true;
-  assert.equal((await f.upload(a,8,bytes)).data.late,true);
+  assert.equal((await f.upload(a,8,bytes,{expected:1})).data.late,true);
   assert.equal((await f.upload(a,8,new Uint8Array([80,75,3,4]))).status,400);
-  assert.equal((await f.upload(a,8,bytes,now(),"../x.zip")).status,400);
+  assert.equal((await f.upload(a,8,bytes,{filename:"../x.zip"})).status,400);
   f.db.policy.maxMiB=1;
   assert.equal((await f.upload(a,8,new Uint8Array(1024*1024+1))).status,413);
   f.store.failure=true;
-  assert.equal((await f.upload(a,8,bytes)).status,503);
+  assert.equal((await f.upload(a,8,bytes,{expected:2})).status,503);
   assert.equal(f.db.ledger.submissions.length,2);
-  assert.equal((await f.request("me",{token:a})).data.topics[0].versions[0].version,2);
+  assert.equal((await f.request("me",{token:a})).data.topics[7].versions[0].version,2);
 });
 
-test("optional GitHub identity binds once, requires the same browser and blocks older roster sessions",async()=>{
+test("optional GitHub identity binds once, requires the same browser and blocks older self-reported sessions",async()=>{
   const f=fixture(), a=await f.login(alpha), b=await f.login(beta);
   const verifier=url64(crypto.getRandomValues(new Uint8Array(32)));
   const challenge=url64(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(verifier))));
@@ -131,13 +189,13 @@ test("optional GitHub identity binds once, requires the same browser and blocks 
   assert.equal(f.db.ledger.submissions[0].githubId,user.githubId);
 });
 
-test("enforce both assignment limits and reject a malformed directory",()=>{
+test("legacy roster import validation and malformed ZIP directory checks",()=>{
   assert.throws(()=>checkRoster([{...alpha,topics:[1,2,3,4]}]));
   assert.throws(()=>checkRoster([0,1,2,3].map(i=>({...alpha,id:"S"+i,topics:[8]}))));
   assert.throws(()=>checkRoster([{...alpha,topics:[8,8]}]));
-  assert.throws(()=>checkRoster([{...alpha,topics:[21]}]));
+  assert.throws(()=>checkRoster([{...alpha,topics:[24]}]));
   assert.doesNotThrow(()=>checkRoster([alpha,beta]));
   const corrupt=zip("data"); corrupt[corrupt.length-6]=255;
   assert.throws(()=>checkZip(corrupt));
-  assert.match(teacherReport([],emptyLedger()),/尚未导入/);
+  assert.match(teacherReport([],emptyLedger()),/尚无成功提交/);
 });

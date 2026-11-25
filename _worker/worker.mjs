@@ -1,4 +1,4 @@
-import { CourseError, MiB, authorize, checkZip, clean, receipt, requireThat, studentView, teacherReport } from "./course.mjs";
+import { CourseError, MiB, authorize, checkZip, clean, receipt, rememberStudent, requireThat, studentDetails, studentTopicLimit, studentView, teacherReport, topicList, topics } from "./course.mjs";
 import { from64, githubStore, url64 } from "./github.mjs";
 
 const site = "https://mathjk.github.io/2026fallCGdemo/work/";
@@ -73,33 +73,38 @@ async function transaction(store, change) {
   throw new CourseError(409, "其他作业正在保存，请用同一文件重试。");
 }
 
-async function session(env, snap, id, githubId) {
-  const claims = {id, githubId};
-  return {token:await signed(env, "session", claims, 480), student:studentView(snap, claims)};
+async function session(env, snap, claims) {
+  const student = studentView(snap, claims);
+  const details = {id:student.id, name:student.name, college:student.college, githubId:claims.githubId};
+  return {token:await signed(env, "session", details, 480), student};
 }
 
-async function rosterLogin(req, env, store) {
-  const input = await bodyJson(req);
+async function enter(req, env, store) {
+  const student = studentDetails(await bodyJson(req));
   const snap = await store.snapshot();
-  requireThat(snap.roster.length, 409, "老师尚未发布名单和主题分配。");
-  const student = snap.roster.find(s => s.id === clean(input.id) && s.name === clean(input.name) && s.college === clean(input.college));
-  requireThat(student, 403, "资料与课程名单不一致，请核对姓名、学号和学院。");
   requireThat(!snap.ledger.bindings.some(b => b.id === student.id), 403, "该学号已绑定 GitHub，请使用绑定的账号进入。");
-  return session(env, snap, student.id, null);
+  return session(env, snap, {...student, githubId:null});
 }
 
 function checkTopic(snap, claims, topic) {
   const student = authorize(snap, claims);
-  requireThat(student.topics.includes(topic), 403, "此主题未分配到该学号，请联系老师。");
+  const submissions = snap.ledger.submissions;
+  requireThat(!submissions.some(s => s.topic === topic && s.id !== student.id), 409,
+    "这个主题已有其他同学提交，请选择其他主题。");
+  const mine = new Set(submissions.filter(s => s.id === student.id).map(s => s.topic));
+  requireThat(mine.has(topic) || mine.size < studentTopicLimit, 409,
+    "已达到每人 " + studentTopicLimit + " 个主题的上限，可更新自己已提交的作业。");
   return student;
 }
 
-async function upload(req, env, store, topic) {
-  const claims = await readSigned(env, bearer(req), "session");
+async function upload(req, store, topic, claims) {
   const first = await store.snapshot();
   checkTopic(first, claims, topic);
   const key = req.headers.get("Idempotency-Key") || "";
   requireThat(/^[a-f\d]{8}(-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(key), 400, "本次上传缺少有效编号，请重新选择文件。");
+  const expectedText = req.headers.get("X-Expected-Version") ?? "0";
+  requireThat(/^(0|[1-9]\d{0,8})$/.test(expectedText), 400, "作业版本号无效，请刷新后重试。");
+  const expected = Number(expectedText);
   let filename;
   try { filename = clean(decodeURIComponent(req.headers.get("X-Filename") || "")); } catch { filename = ""; }
   requireThat(filename.length <= 180 && /^[^/\\\x00-\x1f\x7f]+\.zip$/i.test(filename), 400, "请选择扩展名为 .zip 的压缩包。");
@@ -115,14 +120,17 @@ async function upload(req, env, store, topic) {
       requireThat(existing.hash === hash && existing.filename === filename, 409, "同一上传编号已用于其他文件，请重新选择。");
       return {value:receipt(existing)};
     }
+    const current = versions.at(-1)?.version || 0;
+    requireThat(expected === current, 409, "作业版本已变化，请刷新页面，在「我的作业」中查看最新版本后再更新。");
     requireThat(bytes.length <= snap.policy.maxMiB * MiB, 413, "文件超过课程大小上限。");
     const now = new Date();
-    const late = snap.policy.deadline !== null && now.getTime() > Date.parse(snap.policy.deadline);
+    const late = snap.policy.deadline !== null && now.getTime() >= Date.parse(snap.policy.deadline);
     requireThat(!late || snap.policy.allowLate, 403, "已超过截止时间，当前不接受补交或更新。");
-    const version = (versions.at(-1)?.version || 0) + 1;
+    const version = current + 1;
     const path = "submissions/topic-" + String(topic).padStart(2, "0") + "/" + student.id + "/v" + version + ".zip";
     blob ??= await store.blob(bytes);
-    const record = {id:student.id, name:student.name, topic, version, filename, path, size:bytes.length, hash, key, time:now.toISOString(), late, githubId:claims.githubId};
+    const record = {id:student.id, name:student.name, topic, version, filename, path, size:bytes.length, hash, key, time:now.toISOString(), late, githubId:claims.githubId, selfReported:true};
+    rememberStudent(snap.ledger, student);
     snap.ledger.submissions.push(record);
     return {files:[{path, sha:blob},{path:"README.md",content:teacherReport(snap.roster, snap.ledger)}],
       message:"收取第 " + topic + " 题，版本 " + version, value:receipt(record)};
@@ -173,14 +181,15 @@ async function oauthFinish(req, env, store, identify) {
   if (!claims) {
     const snap = await store.snapshot();
     const binding = snap.ledger.bindings.find(b => b.githubId === identity.githubId);
-    requireThat(binding, 403, "此 GitHub 账号尚未绑定，请先通过课程名单进入。");
-    return session(env, snap, binding.id, identity.githubId);
+    requireThat(binding, 403, "此 GitHub 账号尚未绑定，请先填写个人信息。");
+    return session(env, snap, {id:binding.id, githubId:identity.githubId});
   }
   return transaction(store, async snap => {
-    authorize(snap, claims);
+    const student = authorize(snap, claims);
     requireThat(!snap.ledger.bindings.some(b => b.id === claims.id || b.githubId === identity.githubId), 409, "该学号或 GitHub 账号已有绑定，请联系老师。");
+    rememberStudent(snap.ledger, student);
     snap.ledger.bindings.push({id:claims.id, ...identity, time:new Date().toISOString()});
-    return {files:[], message:"绑定学生 GitHub 账号", value:await session(env, snap, claims.id, identity.githubId)};
+    return {files:[], message:"绑定学生 GitHub 账号", value:await session(env, snap, {...student, githubId:identity.githubId})};
   });
 }
 
@@ -188,7 +197,7 @@ export async function handle(req, env, openStore = githubStore, identify = githu
   const origin = new URL(site).origin;
   const headers = {"Cache-Control":"no-store", "Content-Type":"application/json; charset=utf-8", "X-Content-Type-Options":"nosniff",
     "Access-Control-Allow-Origin":origin, "Vary":"Origin", "Access-Control-Allow-Methods":"GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers":"Authorization, Content-Type, X-Filename, Idempotency-Key", "Access-Control-Max-Age":"600"};
+    "Access-Control-Allow-Headers":"Authorization, Content-Type, X-Filename, Idempotency-Key, X-Expected-Version", "Access-Control-Max-Age":"600"};
   const respond = (value, status=200) => new Response(JSON.stringify(value), {status, headers});
   try {
     requireThat(!req.headers.has("Origin") || req.headers.get("Origin") === origin, 403, "请从课程网页发起请求。");
@@ -196,17 +205,19 @@ export async function handle(req, env, openStore = githubStore, identify = githu
     const path = new URL(req.url).pathname;
     if (req.method === "GET" && path === "/") return respond({service:"2026 秋计算几何课程作业", course:site});
     const key = req.method + " " + path;
-    const match = /^POST \/api\/topics\/([1-9]|1\d|20)\/upload$/.exec(key);
-    requireThat(match || ["GET /api/course","GET /api/me","POST /api/roster","POST /api/github/start","POST /api/github/finish"].includes(key), 404, "未找到此接口。");
-    if (match || key === "GET /api/me") await readSigned(env, bearer(req), "session");
+    const match = /^POST \/api\/topics\/([1-9]\d*)\/upload$/.exec(key);
+    if (match) requireThat(Number(match[1]) <= topics.length, 404, "未找到这个作业主题。");
+    requireThat(match || ["GET /api/course","GET /api/me","POST /api/enter","POST /api/roster","POST /api/github/start","POST /api/github/finish"].includes(key), 404, "未找到此接口。");
+    let claims;
+    if (match || key === "GET /api/me") claims = await readSigned(env, bearer(req), "session");
     const store = await openStore(env);
-    if (match) return respond(await upload(req, env, store, Number(match[1])));
+    if (match) return respond(await upload(req, store, Number(match[1]), claims));
     if (key === "GET /api/course") {
-      const {policy, roster} = await store.snapshot();
-      return respond({policy, published:roster.length > 0, githubAvailable:Boolean(env.GH_CLIENT_ID && env.GH_CLIENT_SECRET)});
+      const {policy, ledger} = await store.snapshot();
+      return respond({policy, topics:topicList(ledger), studentTopicLimit, published:true, githubAvailable:Boolean(env.GH_CLIENT_ID && env.GH_CLIENT_SECRET)});
     }
-    if (key === "GET /api/me") return respond(studentView(await store.snapshot(), await readSigned(env, bearer(req), "session")));
-    if (key === "POST /api/roster") return respond(await rosterLogin(req, env, store));
+    if (key === "GET /api/me") return respond(studentView(await store.snapshot(), claims));
+    if (key === "POST /api/enter" || key === "POST /api/roster") return respond(await enter(req, env, store));
     if (key === "POST /api/github/start") return respond(await oauthStart(req, env, store));
     return respond(await oauthFinish(req, env, store, identify));
   } catch (error) {
