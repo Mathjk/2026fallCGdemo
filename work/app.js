@@ -30,6 +30,7 @@ async function api(path, {json, bytes, headers = {}, ...options} = {}) {
     if (response.status === 401 && token === saved("session")) { save("session", null); me = null; render(); }
     const error = Error(data.error || "操作未成功，请重试。");
     error.status = response.status;
+    error.code = data.code;
     throw error;
   }
   return data;
@@ -41,6 +42,8 @@ function uploadInfo() {
   const latest = topic && topic.versions[0];
   if ($("send").disabled && !busy) {
     $("previous").textContent = "当前没有可新交的主题。已提交的同学可从「我的作业」进入并更新。";
+  } else if (!latest && me && me.topics.filter(t => t.status === "mine").length >= me.studentTopicLimit) {
+    $("previous").textContent = "已达到个人主题上限，可以选择已提交的主题更新 ZIP。";
   } else {
     $("previous").textContent = latest ? "最近成功提交　" + fmt(latest) + "。更新后可查看历史版本。" : "";
   }
@@ -232,7 +235,12 @@ $("work-form").addEventListener("submit", event => {
     } catch (error) {
       if (error.status === 409) {
         save("upload", null);
-        try { await refresh(); } catch { /* Keep the original submission error visible. */ }
+        if (error.code === "topic_taken") {
+          me.topics.find(t => t.number === topic).status = "taken";
+          course.topics.find(t => t.number === topic).status = "taken";
+        } else {
+          try { await refresh(); } catch { /* Keep the original submission error visible. */ }
+        }
       }
       throw error;
     }

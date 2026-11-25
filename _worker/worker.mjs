@@ -90,7 +90,7 @@ function checkTopic(snap, claims, topic) {
   const student = authorize(snap, claims);
   const submissions = snap.ledger.submissions;
   requireThat(!submissions.some(s => s.topic === topic && s.id !== student.id), 409,
-    "这个主题已有其他同学提交，请选择其他主题。");
+    "这个主题已有其他同学提交，请选择其他主题。", "topic_taken");
   const mine = new Set(submissions.filter(s => s.id === student.id).map(s => s.topic));
   requireThat(mine.has(topic) || mine.size < studentTopicLimit, 409,
     "已达到每人 " + studentTopicLimit + " 个主题的上限，可更新自己已提交的作业。");
@@ -226,7 +226,8 @@ export async function handle(req, env, openStore = githubStore, identify = githu
       const frames = String(error.stack || "").split("\n").slice(1,4).map(line => line.trim().split(" (")[0].slice(0,90));
       console.error("Course handler error", error.name, frames.join(" / "));
     }
-    return respond({error:error instanceof CourseError ? error.message : "课程服务暂时未能完成请求，请稍后重试。"}, error instanceof CourseError ? error.status : 503);
+    if (error instanceof CourseError) return respond({error:error.message, code:error.code}, error.status);
+    return respond({error:"课程服务暂时未能完成请求，请稍后重试。"}, 503);
   }
 }
 

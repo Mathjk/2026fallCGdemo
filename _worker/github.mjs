@@ -26,13 +26,25 @@ async function applicationJwt(env) {
 
 let tokenCache;
 let snapshotCache;
+const temporaryFailure = new Set([408,500,502,503,504]);
 async function send(path, token, options = {}) {
   const {method = "GET", body, raw = false} = options;
-  return fetch(api + path, { method, redirect:"manual", headers:{
+  const init = { method, redirect:"manual", headers:{
     Authorization:"Bearer " + token, "User-Agent":"Mathjk-CG-Coursework",
     Accept:raw ? "application/vnd.github.raw+json" : "application/vnd.github+json",
     "X-GitHub-Api-Version":"2022-11-28", "Content-Type":"application/json"
-  }, body:body === undefined ? undefined : JSON.stringify(body) });
+  }, body:body === undefined ? undefined : JSON.stringify(body) };
+  // A ref change may have succeeded even when its response was lost. The transaction
+  // reconciles it against the new head; reads and immutable Git object writes can repeat.
+  if (method === "PATCH") return fetch(api + path, init);
+  for (let n = 0; ; n++) {
+    let response;
+    try { response = await fetch(api + path, init); }
+    catch (error) { if (n === 2) throw error; }
+    if (response && (n === 2 || !temporaryFailure.has(response.status))) return response;
+    await response?.body?.cancel();
+    await new Promise(resolve => setTimeout(resolve, 250 * (n+1) + Math.random()*150));
+  }
 }
 
 async function checked(response) {
@@ -96,8 +108,14 @@ export async function privateRepositoryStore(token) {
       const nextTree = await json("/git/trees", {method:"POST",body:{base_tree:snapshot.tree, tree}});
       const next = await json("/git/commits", {method:"POST",body:{message, tree:nextTree.sha, parents:[snapshot.head]}});
       // Recheck topic ownership, identity and versions if another commit wins this race.
-      const response = await request("/git/refs/heads/" + branch, {method:"PATCH",body:{sha:next.sha, force:false}});
-      if ([409,422].includes(response.status)) { await response.body?.cancel(); return false; }
+      let response;
+      try {
+        response = await request("/git/refs/heads/" + branch, {method:"PATCH",body:{sha:next.sha, force:false}});
+      } catch { return false; }
+      if ([409,422].includes(response.status) || temporaryFailure.has(response.status)) {
+        await response.body?.cancel();
+        return false;
+      }
       await checked(response);
       return true;
     }

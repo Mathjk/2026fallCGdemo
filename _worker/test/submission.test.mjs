@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { handle } from "../worker.mjs";
 import { checkRoster, checkZip, defaultPolicy, emptyLedger, teacherReport } from "../course.mjs";
-import { url64 } from "../github.mjs";
+import { privateRepositoryStore, url64 } from "../github.mjs";
 
 const env = {SESSION_KEY:"local-test-session-key-for-course-only",GH_CLIENT_ID:"local-client",GH_CLIENT_SECRET:"local-secret"};
 const alpha = {id:"TEST001",name:"测试甲",college:"测试学院",topics:[8,14]};
@@ -82,7 +82,9 @@ test("one owner for a topic, explicit updates, retry receipts and private histor
   assert.deepEqual(await f.upload(a,23,zip("one"),{key}),first);
   assert.equal((await f.upload(a,23,zip("different"),{key})).status,409);
   assert.equal((await f.upload(a,23,zip("second first submission"))).status,409);
-  assert.equal((await f.upload(b,23,zip("other student"))).status,409);
+  const other=await f.upload(b,23,zip("other student"));
+  assert.equal(other.status,409);
+  assert.equal(other.data.code,"topic_taken");
   assert.equal((await f.upload(b,23,zip("other student update"),{expected:1})).status,409);
   const changed=await f.upload(await f.login(alpha),23,zip("two"),{expected:1});
   assert.equal(changed.data.version,2);
@@ -112,6 +114,35 @@ test("concurrent first submissions and stale updates each have exactly one winne
   assert.deepEqual(updates.map(r=>r.status).sort(),[200,409]);
   assert.deepEqual(f.db.ledger.submissions.map(s=>s.version),[1,2]);
   assert.equal(new Set(f.db.ledger.submissions.map(s=>s.id)).size,1);
+});
+
+test("GitHub transient object failures retry, while an ambiguous ref response asks for reconciliation",async t=>{
+  let treeCalls=0, refCalls=0;
+  t.mock.method(globalThis,"fetch",async (url,init)=>{
+    const path=new URL(url).pathname;
+    if (init.method==="GET") return Response.json({private:true,default_branch:"main"});
+    if (path.endsWith("/git/trees")) {
+      treeCalls++;
+      return treeCalls===1 ? new Response(null,{status:500}):Response.json({sha:"new-tree"});
+    }
+    if (path.endsWith("/git/commits")) return Response.json({sha:"new-commit"});
+    if (path.endsWith("/git/refs/heads/main")) {refCalls++;return new Response(null,{status:500});}
+    assert.fail("Unexpected GitHub request");
+  });
+  const store=await privateRepositoryStore("fixture-token");
+  assert.equal(await store.commit({head:"current-head",tree:"current-tree"},[],"fixture"),false);
+  assert.equal(treeCalls,2);
+  assert.equal(refCalls,1);
+});
+
+test("an upload whose Git ref advanced but acknowledgement was lost still saves only v1",async()=>{
+  const f=fixture(), a=await f.login(alpha);
+  const commit=f.store.commit.bind(f.store);
+  f.store.commit=async (...args)=>{assert.ok(await commit(...args));return false;};
+  const saved=await f.upload(a,23,zip("one successful commit"));
+  assert.equal(saved.status,200);
+  assert.equal(saved.data.version,1);
+  assert.equal(f.db.ledger.submissions.length,1);
 });
 
 test("all 23 catalog entries accept one first submission, reject the next student and allow an owner update",async()=>{

@@ -8,14 +8,15 @@ export const topics = [
 ];
 
 export class CourseError extends Error {
-  constructor(status, message) {
+  constructor(status, message, code) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
-export function requireThat(condition, status, message) {
-  if (!condition) throw new CourseError(status, message);
+export function requireThat(condition, status, message, code) {
+  if (!condition) throw new CourseError(status, message, code);
 }
 
 export const clean = value => typeof value === "string" ? value.normalize("NFC").trim() : "";
