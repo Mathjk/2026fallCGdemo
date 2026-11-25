@@ -10,7 +10,7 @@
 
 ## 设置截止时间和文件上限
 
-单份 ZIP 上限为 10 MiB。2026 年 12 月 31 日北京时间 23:59 起停止首次提交和更新。老师可以在私库编辑 maxMiB（1 至 20）、deadline（带时区的时间）和 allowLate（是否允许补交）。学生页以北京时间显示。[私库收交设置](https://github.com/Mathjk/2026fallCG-submissions/blob/main/policy.json)
+单份 ZIP 上限由私库的 maxMiB 控制，可设为 1 至 20 MiB。学生提交页会读取并显示当前上限。2026 年 12 月 31 日北京时间 23:59 起停止首次提交和更新。老师也可以在私库编辑 deadline（带时区的时间）和 allowLate（是否允许补交）。[私库收交设置](https://github.com/Mathjk/2026fallCG-submissions/blob/main/policy.json)
 
 ## 处理同一学号的多次提交
 

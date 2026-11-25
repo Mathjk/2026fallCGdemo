@@ -22,7 +22,7 @@ export function requireThat(condition, status, message, code) {
 export const clean = value => typeof value === "string" ? value.normalize("NFC").trim() : "";
 export const MiB = 1024 * 1024;
 export const studentTopicLimit = 3;
-export const defaultPolicy = { maxMiB: 10, deadline: null, allowLate: false };
+export const defaultPolicy = { maxMiB: 20, deadline: null, allowLate: false };
 export const emptyLedger = () => ({ students: [], bindings: [], submissions: [] });
 
 export function studentDetails(input) {
